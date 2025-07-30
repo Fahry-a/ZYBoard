@@ -32,18 +32,41 @@ function Register({ onToggleForm }) {
   const [loading, setLoading] = useState(false);
   const { darkMode, toggleDarkMode } = useTheme();
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-    setError('');
+  // Validasi password yang lebih kuat
+  const validatePassword = (password) => {
+    const minLength = 8;
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasNumbers = /\d/.test(password);
+    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+
+    if (password.length < minLength) {
+      return 'Password must be at least 8 characters long';
+    }
+    if (!hasUpperCase || !hasLowerCase) {
+      return 'Password must contain both uppercase and lowercase letters';
+    }
+    if (!hasNumbers) {
+      return 'Password must contain at least one number';
+    }
+    if (!hasSpecialChar) {
+      return 'Password must contain at least one special character';
+    }
+    return '';
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+
+    // Validasi password
+    const passwordError = validatePassword(formData.password);
+    if (passwordError) {
+      setError(passwordError);
+      setLoading(false);
+      return;
+    }
 
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
@@ -60,31 +83,21 @@ function Register({ onToggleForm }) {
         body: JSON.stringify({
           username: formData.username,
           email: formData.email,
-          password: formData.password,
+          password: formData.password // Add password to request
         }),
+        credentials: 'include'
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
+        const data = await response.json();
         throw new Error(data.message || 'Registration failed');
       }
 
-      alert('Registration successful! Please login.');
-      onToggleForm(); // Switch to login form
+      onToggleForm(); // Switch to login form after successful registration
     } catch (err) {
-      console.error('Registration error:', err);
-      setError(err.message || 'Registration failed');
+      setError(err.message);
     } finally {
       setLoading(false);
-    }
-  };
-
-  // Handler untuk tombol Sign In
-  const handleSignInClick = (e) => {
-    e.preventDefault(); // Mencegah default action
-    if (onToggleForm) {
-      onToggleForm();
     }
   };
 
