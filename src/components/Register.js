@@ -9,6 +9,8 @@ import {
   IconButton,
   InputAdornment,
   Link,
+  Alert,
+  CircularProgress,
 } from '@mui/material';
 import {
   Visibility,
@@ -50,7 +52,7 @@ function Register({ onToggleForm }) {
     }
 
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/auth/register`, {
+      const response = await fetch('http://localhost:3030/api/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -68,12 +70,21 @@ function Register({ onToggleForm }) {
         throw new Error(data.message || 'Registration failed');
       }
 
-      // Switch to login form
-      onToggleForm();
+      alert('Registration successful! Please login.');
+      onToggleForm(); // Switch to login form
     } catch (err) {
-      setError(err.message);
+      console.error('Registration error:', err);
+      setError(err.message || 'Registration failed');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handler untuk tombol Sign In
+  const handleSignInClick = (e) => {
+    e.preventDefault(); // Mencegah default action
+    if (onToggleForm) {
+      onToggleForm();
     }
   };
 
@@ -101,6 +112,13 @@ function Register({ onToggleForm }) {
               {darkMode ? <LightMode /> : <DarkMode />}
             </IconButton>
           </Box>
+
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
+
           <form onSubmit={handleSubmit}>
             <TextField
               fullWidth
@@ -111,6 +129,7 @@ function Register({ onToggleForm }) {
               margin="normal"
               variant="outlined"
               required
+              disabled={loading}
             />
             <TextField
               fullWidth
@@ -122,6 +141,7 @@ function Register({ onToggleForm }) {
               margin="normal"
               variant="outlined"
               required
+              disabled={loading}
             />
             <TextField
               fullWidth
@@ -133,12 +153,14 @@ function Register({ onToggleForm }) {
               margin="normal"
               variant="outlined"
               required
+              disabled={loading}
               InputProps={{
                 endAdornment: (
                   <InputAdornment position="end">
                     <IconButton
                       onClick={() => setShowPassword(!showPassword)}
                       edge="end"
+                      disabled={loading}
                     >
                       {showPassword ? <VisibilityOff /> : <Visibility />}
                     </IconButton>
@@ -156,27 +178,37 @@ function Register({ onToggleForm }) {
               margin="normal"
               variant="outlined"
               required
+              disabled={loading}
             />
             <Button
               fullWidth
               type="submit"
               variant="contained"
               sx={{ mt: 3, mb: 2 }}
+              disabled={loading}
             >
-              Sign Up
+              {loading ? (
+                <CircularProgress size={24} color="inherit" />
+              ) : (
+                'Sign Up'
+              )}
             </Button>
           </form>
-          <Typography variant="body2" align="center">
-            Already have an account?{' '}
-            <Link
-              component="button"
-              variant="body2"
-              onClick={onToggleForm}
-              sx={{ textDecoration: 'none' }}
+          
+          {/* Updated Sign In link */}
+          <Box sx={{ textAlign: 'center' }}>
+            <Typography variant="body2" display="inline">
+              Already have an account?{' '}
+            </Typography>
+            <Button
+              variant="text"
+              onClick={handleSignInClick}
+              disabled={loading}
+              sx={{ textTransform: 'none' }}
             >
               Sign In
-            </Link>
-          </Typography>
+            </Button>
+          </Box>
         </CardContent>
       </Card>
     </Box>

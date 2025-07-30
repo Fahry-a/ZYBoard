@@ -7,20 +7,24 @@ import Login from './components/Login';
 import Register from './components/Register';
 import Dashboard from './components/Dashboard';
 
-function AppContent() { // Buat komponen terpisah untuk menggunakan hooks
+function AppContent() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showLogin, setShowLogin] = useState(true);
   const { darkMode } = useTheme();
   const theme = createAppTheme(darkMode ? 'dark' : 'light');
+
+  const handleToggleForm = () => {
+    setShowLogin(!showLogin);
+  };
 
   if (!isLoggedIn) {
     return (
       <MuiThemeProvider theme={theme}>
         <CssBaseline />
         {showLogin ? (
-          <Login onToggleForm={() => setShowLogin(false)} />
+          <Login onToggleForm={handleToggleForm} />
         ) : (
-          <Register onToggleForm={() => setShowLogin(true)} />
+          <Register onToggleForm={handleToggleForm} />
         )}
       </MuiThemeProvider>
     );

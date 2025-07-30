@@ -15,7 +15,10 @@ const __dirname = dirname(__filename);
 dotenv.config();
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:5173', // atau port yang digunakan frontend
+  credentials: true
+}));
 app.use(express.json());
 
 // WebDAV client creator function
