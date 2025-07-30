@@ -1,25 +1,21 @@
 {
-  "name": "zyboard",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "ZYBoard",
+  "version": "0.1.0",
+  "private": true,
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Fahry-a/ZYBoard.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/Fahry-a/ZYBoard/issues"
-  },
-  "homepage": "https://github.com/Fahry-a/ZYBoard#readme",
   "dependencies": {
-    "axios": "^1.11.0",
-    "cheerio": "^1.1.2",
-    "express": "^5.1.0"
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "next": "15.4.5"
+  },
+  "devDependencies": {
+    "eslint": "^9",
+    "eslint-config-next": "15.4.5",
+    "@eslint/eslintrc": "^3"
   }
 }
