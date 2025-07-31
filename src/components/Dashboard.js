@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3030';
 const Dashboard = () => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
     const navigate = useNavigate();
 
     useEffect(() => {
-        // Check authentication status when component mounts
         const checkAuth = async () => {
             try {
                 const token = localStorage.getItem('token');
@@ -17,7 +17,7 @@ const Dashboard = () => {
                     return;
                 }
 
-                const response = await axios.get('http://localhost:5000/api/user/profile', {
+                const response = await axios.get(`${API_URL}/api/user/profile`, {
                     headers: {
                         Authorization: `Bearer ${token}`
                     }
@@ -27,6 +27,7 @@ const Dashboard = () => {
                 setLoading(false);
             } catch (error) {
                 console.error('Authentication error:', error);
+                setError(error.message);
                 localStorage.removeItem('token');
                 navigate('/login');
             }
@@ -34,6 +35,33 @@ const Dashboard = () => {
 
         checkAuth();
     }, [navigate]);
+
+    if (loading) {
+        return (
+            <div style={{ 
+                display: 'flex', 
+                justifyContent: 'center', 
+                alignItems: 'center', 
+                height: '100vh' 
+            }}>
+                Loading...
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div style={{ 
+                display: 'flex', 
+                justifyContent: 'center', 
+                alignItems: 'center', 
+                height: '100vh',
+                color: 'red' 
+            }}>
+                Error: {error}
+            </div>
+        );
+    }
 
     const handleLogout = () => {
         localStorage.removeItem('token');

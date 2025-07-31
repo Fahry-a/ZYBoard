@@ -1,6 +1,18 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import {
+  Box,
+  Card,
+  CardContent,
+  TextField,
+  Button,
+  Typography,
+  Link,
+  Alert,
+  CircularProgress
+} from '@mui/material';
+import { useTheme } from '../contexts/ThemeContext';
 
 const Register = () => {
     const navigate = useNavigate();
@@ -12,6 +24,7 @@ const Register = () => {
     });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const { darkMode } = useTheme();
 
     const { name, email, password, confirmPassword } = formData;
 
@@ -20,8 +33,9 @@ const Register = () => {
             ...formData,
             [e.target.name]: e.target.value
         });
+        setError('');
     };
-
+    
     const validateForm = () => {
         if (!name || !email || !password || !confirmPassword) {
             setError('All fields are required');
@@ -50,24 +64,18 @@ const Register = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
-        if (!validateForm()) {
-            return;
-        }
+        setLoading(true);
 
         try {
-            setLoading(true);
-            setError('');
-
             const response = await axios.post('http://localhost:5000/api/auth/register', {
                 name,
                 email,
                 password
             });
 
-            if (response.data.token) {
-                localStorage.setItem('token', response.data.token);
-                navigate('/dashboard');
+            if (response.data.message === 'User registered successfully') {
+                // Sukses, arahkan ke halaman login
+                navigate('/login');
             }
         } catch (err) {
             setError(err.response?.data?.message || 'An error occurred during registration');
@@ -76,168 +84,107 @@ const Register = () => {
         }
     };
 
+    const handleLoginClick = () => {
+        navigate('/login');
+    };
+
     return (
-        <div className="register-container">
-            <div className="register-form-container">
-                <h1>Create Account</h1>
-                {error && <div className="error-message">{error}</div>}
-                
-                <form onSubmit={handleSubmit}>
-                    <div className="form-group">
-                        <label htmlFor="name">Full Name</label>
-                        <input
-                            type="text"
-                            id="name"
+        <Box
+            sx={{
+                minHeight: '100vh',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                p: 2,
+                background: darkMode
+                    ? 'linear-gradient(45deg, #1a237e 30%, #311b92 90%)'
+                    : 'linear-gradient(45deg, #bbdefb 30%, #e3f2fd 90%)'
+            }}
+        >
+            <Card sx={{ maxWidth: 400, width: '100%' }}>
+                <CardContent sx={{ p: 3 }}>
+                    <Typography variant="h5" component="h1" gutterBottom>
+                        Create Account
+                    </Typography>
+
+                    {error && (
+                        <Alert severity="error" sx={{ mb: 2 }}>
+                            {error}
+                        </Alert>
+                    )}
+
+                    <form onSubmit={handleSubmit}>
+                        <TextField
+                            fullWidth
+                            label="Full Name"
                             name="name"
                             value={name}
                             onChange={handleChange}
-                            placeholder="Enter your full name"
+                            margin="normal"
+                            required
+                            disabled={loading}
                         />
-                    </div>
-
-                    <div className="form-group">
-                        <label htmlFor="email">Email Address</label>
-                        <input
-                            type="email"
-                            id="email"
+                        <TextField
+                            fullWidth
+                            label="Email"
                             name="email"
+                            type="email"
                             value={email}
                             onChange={handleChange}
-                            placeholder="Enter your email"
+                            margin="normal"
+                            required
+                            disabled={loading}
                         />
-                    </div>
-
-                    <div className="form-group">
-                        <label htmlFor="password">Password</label>
-                        <input
-                            type="password"
-                            id="password"
+                        <TextField
+                            fullWidth
+                            label="Password"
                             name="password"
+                            type="password"
                             value={password}
                             onChange={handleChange}
-                            placeholder="Enter your password"
+                            margin="normal"
+                            required
+                            disabled={loading}
                         />
-                    </div>
-
-                    <div className="form-group">
-                        <label htmlFor="confirmPassword">Confirm Password</label>
-                        <input
-                            type="password"
-                            id="confirmPassword"
+                        <TextField
+                            fullWidth
+                            label="Confirm Password"
                             name="confirmPassword"
+                            type="password"
                             value={confirmPassword}
                             onChange={handleChange}
-                            placeholder="Confirm your password"
+                            margin="normal"
+                            required
+                            disabled={loading}
                         />
-                    </div>
 
-                    <button 
-                        type="submit" 
-                        className="register-button"
-                        disabled={loading}
-                    >
-                        {loading ? 'Creating Account...' : 'Register'}
-                    </button>
-                </form>
+                        <Button
+                            type="submit"
+                            fullWidth
+                            variant="contained"
+                            sx={{ mt: 3, mb: 2 }}
+                            disabled={loading}
+                        >
+                            {loading ? <CircularProgress size={24} /> : 'Register'}
+                        </Button>
+                    </form>
 
-                <p className="login-link">
-                    Already have an account? <Link to="/login">Login here</Link>
-                </p>
-            </div>
-
-            <style jsx>{`
-                .register-container {
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    min-height: 100vh;
-                    background-color: #f5f5f5;
-                    padding: 20px;
-                }
-
-                .register-form-container {
-                    background: white;
-                    padding: 40px;
-                    border-radius: 10px;
-                    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-                    width: 100%;
-                    max-width: 400px;
-                }
-
-                h1 {
-                    text-align: center;
-                    margin-bottom: 30px;
-                    color: #333;
-                }
-
-                .error-message {
-                    background-color: #ffe6e6;
-                    color: #dc3545;
-                    padding: 10px;
-                    border-radius: 4px;
-                    margin-bottom: 20px;
-                    text-align: center;
-                }
-
-                .form-group {
-                    margin-bottom: 20px;
-                }
-
-                label {
-                    display: block;
-                    margin-bottom: 5px;
-                    color: #555;
-                }
-
-                input {
-                    width: 100%;
-                    padding: 10px;
-                    border: 1px solid #ddd;
-                    border-radius: 4px;
-                    font-size: 16px;
-                }
-
-                input:focus {
-                    outline: none;
-                    border-color: #4a90e2;
-                }
-
-                .register-button {
-                    width: 100%;
-                    padding: 12px;
-                    background-color: #4a90e2;
-                    color: white;
-                    border: none;
-                    border-radius: 4px;
-                    font-size: 16px;
-                    cursor: pointer;
-                    margin-top: 10px;
-                }
-
-                .register-button:hover {
-                    background-color: #357abd;
-                }
-
-                .register-button:disabled {
-                    background-color: #cccccc;
-                    cursor: not-allowed;
-                }
-
-                .login-link {
-                    text-align: center;
-                    margin-top: 20px;
-                }
-
-                .login-link a {
-                    color: #4a90e2;
-                    text-decoration: none;
-                }
-
-                .login-link a:hover {
-                    text-decoration: underline;
-                }
-            `}</style>
-        </div>
+                    <Box sx={{ textAlign: 'center', mt: 2 }}>
+                        <Typography variant="body2">
+                            Already have an account?{' '}
+                            <Link
+                                component="button"
+                                variant="body2"
+                                onClick={handleLoginClick}
+                                sx={{ textDecoration: 'none' }}
+                            >
+                                Sign In
+                            </Link>
+                        </Typography>
+                    </Box>
+                </CardContent>
+            </Card>
+        </Box>
     );
 };
 
