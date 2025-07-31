@@ -1,184 +1,164 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3030';
+import {
+  Box,
+  AppBar,
+  Toolbar,
+  Typography,
+  IconButton,
+  Container,
+  Paper,
+  Grid,
+  Button,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
+  Divider,
+} from '@mui/material';
+import {
+  Menu as MenuIcon,
+  LightMode,
+  DarkMode,
+  Folder,
+  InsertDriveFile,
+  Logout,
+} from '@mui/icons-material';
+import { useTheme } from '@mui/material/styles';
+import { ColorModeContext } from '../App';
+
 const Dashboard = () => {
-    const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const navigate = useNavigate();
+  const navigate = useNavigate();
+  const theme = useTheme();
+  const colorMode = React.useContext(ColorModeContext);
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-    useEffect(() => {
-        const checkAuth = async () => {
-            try {
-                const token = localStorage.getItem('token');
-                if (!token) {
-                    navigate('/login');
-                    return;
-                }
+  useEffect(() => {
+    const checkAuth = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        navigate('/login');
+        return;
+      }
 
-                const response = await axios.get(`${API_URL}/api/user/profile`, {
-                    headers: {
-                        Authorization: `Bearer ${token}`
-                    }
-                });
+      try {
+        const response = await fetch('http://localhost:3030/api/user/profile', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
-                setUser(response.data);
-                setLoading(false);
-            } catch (error) {
-                console.error('Authentication error:', error);
-                setError(error.message);
-                localStorage.removeItem('token');
-                navigate('/login');
-            }
-        };
+        if (!response.ok) {
+          throw new Error('Authentication failed');
+        }
 
-        checkAuth();
-    }, [navigate]);
-
-    if (loading) {
-        return (
-            <div style={{ 
-                display: 'flex', 
-                justifyContent: 'center', 
-                alignItems: 'center', 
-                height: '100vh' 
-            }}>
-                Loading...
-            </div>
-        );
-    }
-
-    if (error) {
-        return (
-            <div style={{ 
-                display: 'flex', 
-                justifyContent: 'center', 
-                alignItems: 'center', 
-                height: '100vh',
-                color: 'red' 
-            }}>
-                Error: {error}
-            </div>
-        );
-    }
-
-    const handleLogout = () => {
+        const data = await response.json();
+        setUser(data);
+      } catch (err) {
+        console.error('Auth error:', err);
         localStorage.removeItem('token');
         navigate('/login');
+      } finally {
+        setLoading(false);
+      }
     };
 
-    if (loading) {
-        return <div>Loading...</div>;
-    }
+    checkAuth();
+  }, [navigate]);
 
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    navigate('/login');
+  };
+
+  if (loading) {
     return (
-        <div className="dashboard-container">
-            <nav className="dashboard-nav">
-                <h1>Dashboard</h1>
-                <button onClick={handleLogout} className="logout-btn">
-                    Logout
-                </button>
-            </nav>
-            
-            <div className="dashboard-content">
-                <div className="user-info">
-                    <h2>Welcome, {user?.name || 'User'}</h2>
-                    <p>Email: {user?.email}</p>
-                </div>
-                
-                <div className="dashboard-stats">
-                    {/* Add your dashboard statistics or content here */}
-                    <div className="stat-card">
-                        <h3>Total Projects</h3>
-                        <p>0</p>
-                    </div>
-                    <div className="stat-card">
-                        <h3>Active Tasks</h3>
-                        <p>0</p>
-                    </div>
-                    <div className="stat-card">
-                        <h3>Completed Tasks</h3>
-                        <p>0</p>
-                    </div>
-                </div>
-
-                <div className="recent-activity">
-                    <h3>Recent Activity</h3>
-                    <div className="activity-list">
-                        <p>No recent activity</p>
-                    </div>
-                </div>
-            </div>
-
-            <style jsx>{`
-                .dashboard-container {
-                    padding: 20px;
-                    max-width: 1200px;
-                    margin: 0 auto;
-                }
-
-                .dashboard-nav {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 30px;
-                    padding: 10px 0;
-                    border-bottom: 1px solid #eee;
-                }
-
-                .logout-btn {
-                    padding: 8px 16px;
-                    background-color: #dc3545;
-                    color: white;
-                    border: none;
-                    border-radius: 4px;
-                    cursor: pointer;
-                }
-
-                .logout-btn:hover {
-                    background-color: #c82333;
-                }
-
-                .dashboard-content {
-                    display: grid;
-                    gap: 20px;
-                }
-
-                .user-info {
-                    background: #f8f9fa;
-                    padding: 20px;
-                    border-radius: 8px;
-                    margin-bottom: 20px;
-                }
-
-                .dashboard-stats {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-                    gap: 20px;
-                    margin-bottom: 30px;
-                }
-
-                .stat-card {
-                    background: white;
-                    padding: 20px;
-                    border-radius: 8px;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                }
-
-                .recent-activity {
-                    background: white;
-                    padding: 20px;
-                    border-radius: 8px;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                }
-
-                .activity-list {
-                    margin-top: 15px;
-                }
-            `}</style>
-        </div>
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        Loading...
+      </Box>
     );
+  }
+
+  if (error) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        Error: {error}
+      </Box>
+    );
+  }
+
+  return (
+    <Box sx={{ display: 'flex' }}>
+      <AppBar position="fixed">
+        <Toolbar>
+          <IconButton
+            color="inherit"
+            edge="start"
+            sx={{ mr: 2 }}
+          >
+            <MenuIcon />
+          </IconButton>
+          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+            ZYBoard Dashboard
+          </Typography>
+          <IconButton color="inherit" onClick={colorMode.toggleColorMode}>
+            {theme.palette.mode === 'dark' ? <LightMode /> : <DarkMode />}
+          </IconButton>
+          <Button color="inherit" onClick={handleLogout} startIcon={<Logout />}>
+            Logout
+          </Button>
+        </Toolbar>
+      </AppBar>
+      <Container maxWidth="lg" sx={{ mt: 10, mb: 4 }}>
+        <Grid container spacing={3}>
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3, mb: 3 }}>
+              <Typography variant="h5" gutterBottom>
+                Welcome, {user?.username || 'User'}
+              </Typography>
+              <Typography color="textSecondary">
+                Email: {user?.email}
+              </Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Paper sx={{ p: 2 }}>
+              <Typography variant="h6" gutterBottom>
+                Storage
+              </Typography>
+              <List>
+                <ListItem button>
+                  <ListItemIcon>
+                    <Folder />
+                  </ListItemIcon>
+                  <ListItemText primary="My Files" />
+                </ListItem>
+                <Divider />
+                <ListItem button>
+                  <ListItemIcon>
+                    <InsertDriveFile />
+                  </ListItemIcon>
+                  <ListItemText primary="Recent Files" />
+                </ListItem>
+              </List>
+            </Paper>
+          </Grid>
+          <Grid item xs={12} md={8}>
+            <Paper sx={{ p: 2 }}>
+              <Typography variant="h6" gutterBottom>
+                Recent Activity
+              </Typography>
+              <Typography color="textSecondary">
+                No recent activity
+              </Typography>
+            </Paper>
+          </Grid>
+        </Grid>
+      </Container>
+    </Box>
+  );
 };
 
 export default Dashboard;

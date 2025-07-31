@@ -2,183 +2,193 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
-  Card,
-  CardContent,
-  TextField,
   Button,
+  TextField,
   Typography,
+  Container,
+  Paper,
+  IconButton,
+  InputAdornment,
   Alert,
-  CircularProgress
 } from '@mui/material';
-import { useTheme } from '../contexts/ThemeContext';
-
-const API_URL = 'http://localhost:3030'; // Ubah port ke 3030
+import { Visibility, VisibilityOff, LightMode, DarkMode } from '@mui/icons-material';
+import { useTheme } from '@mui/material/styles';
+import { ColorModeContext } from '../App';
 
 const Register = () => {
-    const navigate = useNavigate();
-    const [formData, setFormData] = useState({
-        username: '', // Ubah dari name ke username sesuai backend
-        email: '',
-        password: '',
-        confirmPassword: ''
+  const navigate = useNavigate();
+  const theme = useTheme();
+  const colorMode = React.useContext(ColorModeContext);
+  
+  const [formData, setFormData] = useState({
+    username: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
     });
-    const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
-    const { darkMode } = useTheme();
+  };
 
-    const { username, email, password, confirmPassword } = formData;
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
 
-    const handleChange = (e) => {
-        setFormData({
-            ...formData,
-            [e.target.name]: e.target.value
-        });
-        setError('');
-    };
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      setLoading(false);
+      return;
+    }
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setLoading(true);
+    try {
+      const response = await fetch('http://localhost:3030/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: formData.username,
+          email: formData.email,
+          password: formData.password,
+        }),
+      });
 
-        // Validasi password
-        if (password !== confirmPassword) {
-            setError('Passwords do not match');
-            setLoading(false);
-            return;
-        }
+      const data = await response.json();
 
-        try {
-            const response = await fetch(`${API_URL}/api/auth/register`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    username,
-                    email,
-                    password
-                })
-            });
+      if (!response.ok) {
+        throw new Error(data.message || 'Registration failed');
+      }
 
-            const data = await response.json();
+      alert('Registration successful! Please login.');
+      navigate('/login');
+    } catch (err) {
+      setError(err.message || 'Registration failed');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-            if (!response.ok) {
-                throw new Error(data.message || 'Registration failed');
-            }
-
-            alert('Registration successful! Please login.');
-            navigate('/login');
-        } catch (err) {
-            console.error('Registration error:', err);
-            setError(err.message || 'Registration failed');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleLoginClick = () => {
-        navigate('/login');
-    };
-
-    return (
-        <Box
-            sx={{
-                minHeight: '100vh',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                p: 2,
-                background: darkMode
-                    ? 'linear-gradient(45deg, #1a237e 30%, #311b92 90%)'
-                    : 'linear-gradient(45deg, #bbdefb 30%, #e3f2fd 90%)'
-            }}
+  return (
+    <Container component="main" maxWidth="xs">
+      <Box
+        sx={{
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Paper
+          elevation={3}
+          sx={{
+            p: 4,
+            width: '100%',
+            borderRadius: 2,
+          }}
         >
-            <Card sx={{ maxWidth: 400, width: '100%' }}>
-                <CardContent sx={{ p: 3 }}>
-                    <Typography variant="h5" component="h1" gutterBottom align="center">
-                        Create Account
-                    </Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Typography component="h1" variant="h5">
+              Sign Up
+            </Typography>
+            <IconButton onClick={colorMode.toggleColorMode}>
+              {theme.palette.mode === 'dark' ? <LightMode /> : <DarkMode />}
+            </IconButton>
+          </Box>
 
-                    {error && (
-                        <Alert severity="error" sx={{ mb: 2 }}>
-                            {error}
-                        </Alert>
-                    )}
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
 
-                    <form onSubmit={handleSubmit}>
-                        <TextField
-                            fullWidth
-                            label="Username"
-                            name="username"
-                            value={username}
-                            onChange={handleChange}
-                            margin="normal"
-                            required
-                            disabled={loading}
-                        />
-                        <TextField
-                            fullWidth
-                            label="Email"
-                            name="email"
-                            type="email"
-                            value={email}
-                            onChange={handleChange}
-                            margin="normal"
-                            required
-                            disabled={loading}
-                        />
-                        <TextField
-                            fullWidth
-                            label="Password"
-                            name="password"
-                            type="password"
-                            value={password}
-                            onChange={handleChange}
-                            margin="normal"
-                            required
-                            disabled={loading}
-                        />
-                        <TextField
-                            fullWidth
-                            label="Confirm Password"
-                            name="confirmPassword"
-                            type="password"
-                            value={confirmPassword}
-                            onChange={handleChange}
-                            margin="normal"
-                            required
-                            disabled={loading}
-                        />
-
-                        <Button
-                            type="submit"
-                            fullWidth
-                            variant="contained"
-                            sx={{ mt: 3, mb: 2 }}
-                            disabled={loading}
-                        >
-                            {loading ? <CircularProgress size={24} /> : 'Register'}
-                        </Button>
-                    </form>
-
-                    <Box sx={{ textAlign: 'center', mt: 2 }}>
-                        <Button
-                            onClick={handleLoginClick}
-                            sx={{
-                                textTransform: 'none',
-                                textDecoration: 'underline',
-                                '&:hover': {
-                                    backgroundColor: 'transparent',
-                                }
-                            }}
-                        >
-                            Already have an account? Sign In
-                        </Button>
-                    </Box>
-                </CardContent>
-            </Card>
-        </Box>
-    );
+          <form onSubmit={handleSubmit}>
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              label="Username"
+              name="username"
+              autoFocus
+              value={formData.username}
+              onChange={handleChange}
+              disabled={loading}
+            />
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              label="Email Address"
+              name="email"
+              type="email"
+              value={formData.email}
+              onChange={handleChange}
+              disabled={loading}
+            />
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              name="password"
+              label="Password"
+              type={showPassword ? 'text' : 'password'}
+              value={formData.password}
+              onChange={handleChange}
+              disabled={loading}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      onClick={() => setShowPassword(!showPassword)}
+                      edge="end"
+                    >
+                      {showPassword ? <VisibilityOff /> : <Visibility />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              name="confirmPassword"
+              label="Confirm Password"
+              type={showPassword ? 'text' : 'password'}
+              value={formData.confirmPassword}
+              onChange={handleChange}
+              disabled={loading}
+            />
+            <Button
+              type="submit"
+              fullWidth
+              variant="contained"
+              sx={{ mt: 3, mb: 2 }}
+              disabled={loading}
+            >
+              {loading ? 'Creating Account...' : 'Sign Up'}
+            </Button>
+            <Button
+              fullWidth
+              variant="text"
+              onClick={() => navigate('/login')}
+              disabled={loading}
+            >
+              Already have an account? Sign In
+            </Button>
+          </form>
+        </Paper>
+      </Box>
+    </Container>
+  );
 };
 
 export default Register;

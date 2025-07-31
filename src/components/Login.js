@@ -1,43 +1,38 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
-  Card,
-  CardContent,
-  TextField,
   Button,
+  TextField,
   Typography,
+  Container,
+  Paper,
   IconButton,
   InputAdornment,
-  Link,
   Alert,
-  CircularProgress,
 } from '@mui/material';
-import {
-  Visibility,
-  VisibilityOff,
-  DarkMode,
-  LightMode,
-} from '@mui/icons-material';
-import { useTheme } from '../contexts/ThemeContext';
+import { Visibility, VisibilityOff, LightMode, DarkMode } from '@mui/icons-material';
+import { useTheme } from '@mui/material/styles';
+import { ColorModeContext } from '../App';
 
-function Register({ onToggleForm }) {
-  const [showPassword, setShowPassword] = useState(false);
+const Login = () => {
+  const navigate = useNavigate();
+  const theme = useTheme();
+  const colorMode = React.useContext(ColorModeContext);
+  
   const [formData, setFormData] = useState({
-    username: '',
     email: '',
     password: '',
-    confirmPassword: '',
   });
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { darkMode, toggleDarkMode } = useTheme();
 
   const handleChange = (e) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
     });
-    setError('');
   };
 
   const handleSubmit = async (e) => {
@@ -45,65 +40,55 @@ function Register({ onToggleForm }) {
     setLoading(true);
     setError('');
 
-    // Validasi
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      setLoading(false);
-      return;
-    }
-
     try {
-      const response = await fetch('http://localhost:3030/api/auth/register', {
+      const response = await fetch('http://localhost:3030/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          username: formData.username,
-          email: formData.email,
-          password: formData.password,
-        }),
+        body: JSON.stringify(formData),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Registration failed');
+        throw new Error(data.message || 'Login failed');
       }
 
-      // Tampilkan pesan sukses dan redirect ke login
-      alert('Registration successful! Please login.');
-      onToggleForm();
+      localStorage.setItem('token', data.token);
+      navigate('/dashboard');
     } catch (err) {
-      console.error('Registration error:', err);
-      setError(err.message || 'Registration failed');
+      setError(err.message || 'Login failed');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        p: 2,
-        background: (theme) =>
-          theme.palette.mode === 'dark'
-            ? 'linear-gradient(45deg, #1a237e 30%, #311b92 90%)'
-            : 'linear-gradient(45deg, #bbdefb 30%, #e3f2fd 90%)',
-      }}
-    >
-      <Card sx={{ maxWidth: 400, width: '100%' }}>
-        <CardContent sx={{ p: 3 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-            <Typography variant="h5" component="h1" fontWeight="500">
-              Sign Up
+    <Container component="main" maxWidth="xs">
+      <Box
+        sx={{
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Paper
+          elevation={3}
+          sx={{
+            p: 4,
+            width: '100%',
+            borderRadius: 2,
+          }}
+        >
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Typography component="h1" variant="h5">
+              Sign In
             </Typography>
-            <IconButton onClick={toggleDarkMode} size="small">
-              {darkMode ? <LightMode /> : <DarkMode />}
+            <IconButton onClick={colorMode.toggleColorMode}>
+              {theme.palette.mode === 'dark' ? <LightMode /> : <DarkMode />}
             </IconButton>
           </Box>
 
@@ -115,38 +100,27 @@ function Register({ onToggleForm }) {
 
           <form onSubmit={handleSubmit}>
             <TextField
-              fullWidth
-              label="Username"
-              name="username"
-              value={formData.username}
-              onChange={handleChange}
               margin="normal"
-              variant="outlined"
               required
-              disabled={loading}
-            />
-            <TextField
               fullWidth
-              label="Email"
+              label="Email Address"
               name="email"
-              type="email"
+              autoComplete="email"
+              autoFocus
               value={formData.email}
               onChange={handleChange}
-              margin="normal"
-              variant="outlined"
-              required
               disabled={loading}
             />
             <TextField
+              margin="normal"
+              required
               fullWidth
-              label="Password"
               name="password"
+              label="Password"
               type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
               value={formData.password}
               onChange={handleChange}
-              margin="normal"
-              variant="outlined"
-              required
               disabled={loading}
               InputProps={{
                 endAdornment: (
@@ -154,7 +128,6 @@ function Register({ onToggleForm }) {
                     <IconButton
                       onClick={() => setShowPassword(!showPassword)}
                       edge="end"
-                      disabled={loading}
                     >
                       {showPassword ? <VisibilityOff /> : <Visibility />}
                     </IconButton>
@@ -162,48 +135,28 @@ function Register({ onToggleForm }) {
                 ),
               }}
             />
-            <TextField
-              fullWidth
-              label="Confirm Password"
-              name="confirmPassword"
-              type={showPassword ? 'text' : 'password'}
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              margin="normal"
-              variant="outlined"
-              required
-              disabled={loading}
-            />
             <Button
-              fullWidth
               type="submit"
+              fullWidth
               variant="contained"
               sx={{ mt: 3, mb: 2 }}
               disabled={loading}
             >
-              {loading ? (
-                <CircularProgress size={24} color="inherit" />
-              ) : (
-                'Sign Up'
-              )}
+              {loading ? 'Signing in...' : 'Sign In'}
             </Button>
-          </form>
-          <Typography variant="body2" align="center">
-            Already have an account?{' '}
-            <Link
-              component="button"
-              variant="body2"
-              onClick={onToggleForm}
-              sx={{ textDecoration: 'none' }}
+            <Button
+              fullWidth
+              variant="text"
+              onClick={() => navigate('/register')}
               disabled={loading}
             >
-              Sign In
-            </Link>
-          </Typography>
-        </CardContent>
-      </Card>
-    </Box>
+              Don't have an account? Sign Up
+            </Button>
+          </form>
+        </Paper>
+      </Box>
+    </Container>
   );
-}
+};
 
-export default Register;
+export default Login;
