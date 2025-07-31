@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import {
   Box,
   Card,
@@ -8,16 +7,17 @@ import {
   TextField,
   Button,
   Typography,
-  Link,
   Alert,
   CircularProgress
 } from '@mui/material';
 import { useTheme } from '../contexts/ThemeContext';
 
+const API_URL = 'http://localhost:3030'; // Ubah port ke 3030
+
 const Register = () => {
     const navigate = useNavigate();
     const [formData, setFormData] = useState({
-        name: '',
+        username: '', // Ubah dari name ke username sesuai backend
         email: '',
         password: '',
         confirmPassword: ''
@@ -26,7 +26,7 @@ const Register = () => {
     const [loading, setLoading] = useState(false);
     const { darkMode } = useTheme();
 
-    const { name, email, password, confirmPassword } = formData;
+    const { username, email, password, confirmPassword } = formData;
 
     const handleChange = (e) => {
         setFormData({
@@ -35,50 +35,42 @@ const Register = () => {
         });
         setError('');
     };
-    
-    const validateForm = () => {
-        if (!name || !email || !password || !confirmPassword) {
-            setError('All fields are required');
-            return false;
-        }
-
-        if (password !== confirmPassword) {
-            setError('Passwords do not match');
-            return false;
-        }
-
-        if (password.length < 6) {
-            setError('Password must be at least 6 characters long');
-            return false;
-        }
-
-        // Basic email validation
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
-            setError('Please enter a valid email address');
-            return false;
-        }
-
-        return true;
-    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
 
+        // Validasi password
+        if (password !== confirmPassword) {
+            setError('Passwords do not match');
+            setLoading(false);
+            return;
+        }
+
         try {
-            const response = await axios.post('http://localhost:5000/api/auth/register', {
-                name,
-                email,
-                password
+            const response = await fetch(`${API_URL}/api/auth/register`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    username,
+                    email,
+                    password
+                })
             });
 
-            if (response.data.message === 'User registered successfully') {
-                // Sukses, arahkan ke halaman login
-                navigate('/login');
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || 'Registration failed');
             }
+
+            alert('Registration successful! Please login.');
+            navigate('/login');
         } catch (err) {
-            setError(err.response?.data?.message || 'An error occurred during registration');
+            console.error('Registration error:', err);
+            setError(err.message || 'Registration failed');
         } finally {
             setLoading(false);
         }
@@ -103,7 +95,7 @@ const Register = () => {
         >
             <Card sx={{ maxWidth: 400, width: '100%' }}>
                 <CardContent sx={{ p: 3 }}>
-                    <Typography variant="h5" component="h1" gutterBottom>
+                    <Typography variant="h5" component="h1" gutterBottom align="center">
                         Create Account
                     </Typography>
 
@@ -116,9 +108,9 @@ const Register = () => {
                     <form onSubmit={handleSubmit}>
                         <TextField
                             fullWidth
-                            label="Full Name"
-                            name="name"
-                            value={name}
+                            label="Username"
+                            name="username"
+                            value={username}
                             onChange={handleChange}
                             margin="normal"
                             required
@@ -170,17 +162,18 @@ const Register = () => {
                     </form>
 
                     <Box sx={{ textAlign: 'center', mt: 2 }}>
-                        <Typography variant="body2">
-                            Already have an account?{' '}
-                            <Link
-                                component="button"
-                                variant="body2"
-                                onClick={handleLoginClick}
-                                sx={{ textDecoration: 'none' }}
-                            >
-                                Sign In
-                            </Link>
-                        </Typography>
+                        <Button
+                            onClick={handleLoginClick}
+                            sx={{
+                                textTransform: 'none',
+                                textDecoration: 'underline',
+                                '&:hover': {
+                                    backgroundColor: 'transparent',
+                                }
+                            }}
+                        >
+                            Already have an account? Sign In
+                        </Button>
                     </Box>
                 </CardContent>
             </Card>
