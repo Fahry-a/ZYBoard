@@ -32,8 +32,11 @@ note: this priject was create by ai github copilot 60%, this project for testing
 
 ```bash
 git clone https://github.com/fahry-a/zyboard.git
+```bash
 cd zyboard
+```bash
 npm install
+```bash
 npm run dev
 
 indev
