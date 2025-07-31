@@ -10,10 +10,22 @@ import {
   IconButton,
   InputAdornment,
   Alert,
+  Snackbar,
+  Slide,
 } from '@mui/material';
-import { Visibility, VisibilityOff, LightMode, DarkMode } from '@mui/icons-material';
+import { 
+  Visibility, 
+  VisibilityOff, 
+  LightMode, 
+  DarkMode,
+  CheckCircleOutline, // Pindahkan import ini ke sini
+} from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { ColorModeContext } from '../App';
+
+function SlideTransition(props) {
+  return <Slide {...props} direction="up" />;
+}
 
 const Register = () => {
   const navigate = useNavigate();
@@ -29,6 +41,7 @@ const Register = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [successSnackbar, setSuccessSnackbar] = useState(false);
 
   const handleChange = (e) => {
     setFormData({
@@ -67,13 +80,24 @@ const Register = () => {
         throw new Error(data.message || 'Registration failed');
       }
 
-      alert('Registration successful! Please login.');
-      navigate('/login');
+      setSuccessSnackbar(true);
+      
+      setTimeout(() => {
+        navigate('/login');
+      }, 2000);
+
     } catch (err) {
       setError(err.message || 'Registration failed');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSnackbarClose = (event, reason) => {
+    if (reason === 'clickaway') {
+      return;
+    }
+    setSuccessSnackbar(false);
   };
 
   return (
@@ -186,6 +210,43 @@ const Register = () => {
             </Button>
           </form>
         </Paper>
+
+        <Snackbar
+          open={successSnackbar}
+          autoHideDuration={2000}
+          onClose={handleSnackbarClose}
+          TransitionComponent={SlideTransition}
+          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        >
+          <Alert
+            onClose={handleSnackbarClose}
+            severity="success"
+            variant="filled"
+            icon={<CheckCircleOutline fontSize="inherit" />}
+            sx={{
+              width: '100%',
+              '& .MuiAlert-icon': {
+                fontSize: '24px',
+              },
+              '& .MuiAlert-message': {
+                fontSize: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+              },
+              boxShadow: (theme) => theme.shadows[3],
+            }}
+          >
+            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              <Typography variant="subtitle1" component="div" fontWeight="500">
+                Registration Successful!
+              </Typography>
+              <Typography variant="body2" color="inherit">
+                Redirecting to login page...
+              </Typography>
+            </Box>
+          </Alert>
+        </Snackbar>
       </Box>
     </Container>
   );

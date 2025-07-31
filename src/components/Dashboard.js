@@ -111,6 +111,7 @@ const Dashboard = () => {
           </Button>
         </Toolbar>
       </AppBar>
+
       <Container maxWidth="lg" sx={{ mt: 10, mb: 4 }}>
         <Grid container spacing={3}>
           <Grid item xs={12}>
@@ -123,6 +124,7 @@ const Dashboard = () => {
               </Typography>
             </Paper>
           </Grid>
+          
           <Grid item xs={12} md={4}>
             <Paper sx={{ p: 2 }}>
               <Typography variant="h6" gutterBottom>
@@ -145,6 +147,7 @@ const Dashboard = () => {
               </List>
             </Paper>
           </Grid>
+
           <Grid item xs={12} md={8}>
             <Paper sx={{ p: 2 }}>
               <Typography variant="h6" gutterBottom>

@@ -1,213 +1,204 @@
-import express from 'express';
-import cors from 'cors';
-import { createClient } from 'webdav';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import dotenv from 'dotenv';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-import pool from './config/db.js';
-import { verifyToken } from './middleware/auth.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const express = require('express');
+const mysql = require('mysql2/promise');
+const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const dotenv = require('dotenv');
 
 dotenv.config();
 
 const app = express();
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000', // Gunakan environment variable
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+
+// Middleware
+app.use(cors());
 app.use(express.json());
 
-// WebDAV client creator function
-const createWebDAVClient = (username) => {
-  return createClient(`${process.env.WEBDAV_URL}/cloud-s/${username}`, {
-    username: process.env.WEBDAV_USERNAME,
-    password: process.env.WEBDAV_PASSWORD
-  });
+// Database connection pool
+const pool = mysql.createPool({
+    host: 'localhost',
+    user: 'root', // sesuaikan dengan user MySQL Anda
+    password: 'ppp.111aaa', // sesuaikan dengan password MySQL Anda
+    database: 'zyboard_db',
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
+});
+
+// Test database connection
+const testConnection = async () => {
+    try {
+        const connection = await pool.getConnection();
+        console.log('✅ Database connected successfully');
+        connection.release();
+        return true;
+    } catch (error) {
+        console.error('❌ Database connection failed:', error);
+        return false;
+    }
 };
 
-// Register endpoint
-app.post('/api/auth/register', async (req, res) => {
-  try {
-    const { username, email, password } = req.body;
+// Authentication middleware
+const verifyToken = (req, res, next) => {
+    const token = req.headers.authorization?.split(' ')[1];
 
-    // Validate input
-    if (!username || !email || !password) {
-      return res.status(400).json({ message: 'All fields are required' });
+    if (!token) {
+        return res.status(401).json({ message: 'No token provided' });
     }
-
-    const connection = await pool.getConnection();
 
     try {
-      // Check if username or email already exists
-      const [existingUser] = await connection.execute(
-        'SELECT * FROM users WHERE username = ? OR email = ?',
-        [username, email]
-      );
-
-      if (existingUser.length > 0) {
-        return res.status(400).json({ message: 'Username or email already exists' });
-      }
-
-      // Hash password
-      const hashedPassword = await bcrypt.hash(password, 10);
-
-      // Insert user
-      const [result] = await connection.execute(
-        'INSERT INTO users (username, email, password) VALUES (?, ?, ?)',
-        [username, email, hashedPassword]
-      );
-
-      // Create user storage entry
-      await connection.execute(
-        'INSERT INTO user_storage (user_id, storage_path) VALUES (?, ?)',
-        [result.insertId, `/cloud-s/${username}`]
-      );
-
-      // Create user directory in WebDAV
-      const webdavClient = createWebDAVClient(username);
-      await webdavClient.createDirectory('');
-
-      res.status(201).json({ message: 'User registered successfully' });
-    } finally {
-      connection.release();
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+        req.user = decoded;
+        next();
+    } catch (error) {
+        return res.status(401).json({ message: 'Invalid token' });
     }
-  } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({ message: 'Error registering user' });
-  }
+};
+
+// Routes
+// Register endpoint
+app.post('/api/auth/register', async (req, res) => {
+    try {
+        const { username, email, password } = req.body;
+
+        // Validate input
+        if (!username || !email || !password) {
+            return res.status(400).json({ message: 'All fields are required' });
+        }
+
+        const connection = await pool.getConnection();
+
+        try {
+            // Check if username or email already exists
+            const [existingUsers] = await connection.execute(
+                'SELECT * FROM users WHERE username = ? OR email = ?',
+                [username, email]
+            );
+
+            if (existingUsers.length > 0) {
+                return res.status(400).json({ message: 'Username or email already exists' });
+            }
+
+            // Hash password
+            const hashedPassword = await bcrypt.hash(password, 10);
+
+            // Insert user
+            const [result] = await connection.execute(
+                'INSERT INTO users (username, email, password) VALUES (?, ?, ?)',
+                [username, email, hashedPassword]
+            );
+
+            // Generate token
+            const token = jwt.sign(
+                { id: result.insertId, username },
+                process.env.JWT_SECRET || 'your-secret-key',
+                { expiresIn: '24h' }
+            );
+
+            res.status(201).json({
+                message: 'User registered successfully',
+                token,
+                user: {
+                    id: result.insertId,
+                    username,
+                    email
+                }
+            });
+        } finally {
+            connection.release();
+        }
+    } catch (error) {
+        console.error('Registration error:', error);
+        res.status(500).json({ message: 'Error registering user' });
+    }
 });
 
 // Login endpoint
 app.post('/api/auth/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    const connection = await pool.getConnection();
-
     try {
-      // Get user
-      const [users] = await connection.execute(
-        'SELECT * FROM users WHERE email = ?',
-        [email]
-      );
+        const { email, password } = req.body;
 
-      if (users.length === 0) {
-        return res.status(401).json({ message: 'Invalid credentials' });
-      }
+        const connection = await pool.getConnection();
 
-      const user = users[0];
+        try {
+            // Get user
+            const [users] = await connection.execute(
+                'SELECT * FROM users WHERE email = ?',
+                [email]
+            );
 
-      // Verify password
-      const validPassword = await bcrypt.compare(password, user.password);
-      if (!validPassword) {
-        return res.status(401).json({ message: 'Invalid credentials' });
-      }
+            if (users.length === 0) {
+                return res.status(401).json({ message: 'Invalid credentials' });
+            }
 
-      // Create token
-      const token = jwt.sign(
-        { id: user.id, username: user.username },
-        process.env.JWT_SECRET,
-        { expiresIn: '24h' }
-      );
+            const user = users[0];
 
-      res.json({
-        token,
-        user: {
-          id: user.id,
-          username: user.username,
-          email: user.email
+            // Verify password
+            const validPassword = await bcrypt.compare(password, user.password);
+            if (!validPassword) {
+                return res.status(401).json({ message: 'Invalid credentials' });
+            }
+
+            // Generate token
+            const token = jwt.sign(
+                { id: user.id, username: user.username },
+                process.env.JWT_SECRET || 'your-secret-key',
+                { expiresIn: '24h' }
+            );
+
+            res.json({
+                token,
+                user: {
+                    id: user.id,
+                    username: user.username,
+                    email: user.email
+                }
+            });
+        } finally {
+            connection.release();
         }
-      });
-    } finally {
-      connection.release();
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ message: 'Error logging in' });
     }
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ message: 'Error logging in' });
-  }
 });
 
-// Protected file routes
-app.get('/api/files', verifyToken, async (req, res) => {
-  try {
-    const webdavClient = createWebDAVClient(req.user.username);
-    const directoryItems = await webdavClient.getDirectoryContents('');
-    res.json(directoryItems);
-  } catch (error) {
-    console.error('Error fetching files:', error);
-    res.status(500).json({ message: 'Error fetching files' });
-  }
+// Get user profile
+app.get('/api/user/profile', verifyToken, async (req, res) => {
+    try {
+        const connection = await pool.getConnection();
+
+        try {
+            const [users] = await connection.execute(
+                'SELECT id, username, email FROM users WHERE id = ?',
+                [req.user.id]
+            );
+
+            if (users.length === 0) {
+                return res.status(404).json({ message: 'User not found' });
+            }
+
+            res.json(users[0]);
+        } finally {
+            connection.release();
+        }
+    } catch (error) {
+        console.error('Profile error:', error);
+        res.status(500).json({ message: 'Error fetching profile' });
+    }
 });
 
-app.post('/api/files/upload', verifyToken, async (req, res) => {
-  try {
-    const { fileName, fileContent } = req.body;
-    const webdavClient = createWebDAVClient(req.user.username);
-    await webdavClient.putFileContents(fileName, fileContent);
-    res.json({ message: 'File uploaded successfully' });
-  } catch (error) {
-    console.error('Error uploading file:', error);
-    res.status(500).json({ message: 'Error uploading file' });
-  }
-});
-
-app.delete('/api/files/:fileName', verifyToken, async (req, res) => {
-  try {
-    const { fileName } = req.params;
-    const webdavClient = createWebDAVClient(req.user.username);
-    await webdavClient.deleteFile(fileName);
-    res.json({ message: 'File deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting file:', error);
-    res.status(500).json({ message: 'Error deleting file' });
-  }
-});
-
+// Start server
 const PORT = process.env.PORT || 3030;
 
-async function testConnections() {
-  let mysqlOk = false;
-  let webdavOk = false;
+const startServer = async () => {
+    const dbConnected = await testConnection();
 
-  // Test MySQL
-  try {
-    const connection = await pool.getConnection();
-    await connection.ping(); // Cek koneksi
-    connection.release();
-    mysqlOk = true;
-    console.log('✅ MySQL connection OK');
-  } catch (err) {
-    console.error('❌ MySQL connection failed:', err.message);
-  }
-
-  // Test WebDAV
-  try {
-    const testClient = createClient(process.env.WEBDAV_URL, {
-      username: process.env.WEBDAV_USERNAME,
-      password: process.env.WEBDAV_PASSWORD
+    app.listen(PORT, () => {
+        console.log(`🚀 Server running on port ${PORT}`);
+        if (!dbConnected) {
+            console.warn('⚠️ Warning: Server running but database connection failed');
+        }
     });
+};
 
-    // Cek direktori root bisa diakses
-    await testClient.getDirectoryContents('/');
-    webdavOk = true;
-    console.log('✅ WebDAV connection OK');
-  } catch (err) {
-    console.error('❌ WebDAV connection failed:', err.message);
-  }
-
-  // Jalankan server setelah tes koneksi
-  app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-    if (!mysqlOk || !webdavOk) {
-      console.warn('⚠️ Warning: Not all services are connected properly.');
-    }
-  });
-}
-
-testConnections();
+startServer();
