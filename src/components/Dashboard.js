@@ -29,6 +29,9 @@ import {
   LinearProgress,
   Menu,
   MenuItem,
+  Alert,
+  Snackbar,
+  CircularProgress,
 } from '@mui/material';
 import Badge from '@mui/material/Badge';
 import {
@@ -51,6 +54,7 @@ import {
   Storage,
   Group,
   BarChart,
+  Refresh,
 } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { ColorModeContext } from '../App';
@@ -63,18 +67,64 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  // New states
+  // States
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [files, setFiles] = useState([]);
   const [uploadDialog, setUploadDialog] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploading, setUploading] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
   const [notifications, setNotifications] = useState([]);
-  const [storageUsed, setStorageUsed] = useState(0);
+  const [storageInfo, setStorageInfo] = useState({ totalSpace: 0, usedSpace: 0, availableSpace: 0 });
   const [recentActivities, setRecentActivities] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [refreshing, setRefreshing] = useState(false);
+
+  const API_BASE = 'http://localhost:3030/api';
+
+  // Get auth headers
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('token');
+    return {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    };
+  };
+
+  const getAuthHeadersForUpload = () => {
+    const token = localStorage.getItem('token');
+    return {
+      'Authorization': `Bearer ${token}`,
+    };
+  };
+
+  // Show snackbar message
+  const showMessage = (message, severity = 'success') => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  // Format file size
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // Format date
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -85,10 +135,8 @@ const Dashboard = () => {
       }
 
       try {
-        const response = await fetch('http://localhost:3030/api/user/profile', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+        const response = await fetch(`${API_BASE}/user/profile`, {
+          headers: getAuthHeaders(),
         });
 
         if (!response.ok) {
@@ -98,14 +146,8 @@ const Dashboard = () => {
         const data = await response.json();
         setUser(data);
         
-        // Fetch additional data
-        await Promise.all([
-          fetchFiles(),
-          fetchNotifications(),
-          fetchStorageInfo(),
-          fetchRecentActivities(),
-          fetchTeamMembers(),
-        ]);
+        // Fetch all data
+        await fetchAllData();
         
       } catch (err) {
         console.error('Auth error:', err);
@@ -119,62 +161,219 @@ const Dashboard = () => {
     checkAuth();
   }, [navigate]);
 
-  // Mock functions for demonstration
+  // Fetch all dashboard data
+  const fetchAllData = async () => {
+    try {
+      await Promise.all([
+        fetchFiles(),
+        fetchNotifications(),
+        fetchStorageInfo(),
+        fetchRecentActivities(),
+        fetchTeamMembers(),
+      ]);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      showMessage('Error loading dashboard data', 'error');
+    }
+  };
+
+  // Fetch files from API
   const fetchFiles = async () => {
-    // Simulate API call
-    setFiles([
-      { id: 1, name: 'Document1.pdf', size: '2.5MB', type: 'pdf', lastModified: '2025-07-31' },
-      { id: 2, name: 'Image1.jpg', size: '1.8MB', type: 'image', lastModified: '2025-07-30' },
-      // Add more mock files
-    ]);
+    try {
+      const response = await fetch(`${API_BASE}/files`, {
+        headers: getAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch files');
+      }
+
+      const data = await response.json();
+      setFiles(data.files || []);
+    } catch (error) {
+      console.error('Error fetching files:', error);
+      showMessage('Error loading files', 'error');
+    }
   };
 
+  // Fetch notifications
   const fetchNotifications = async () => {
-    setNotifications([
-      { id: 1, message: 'New file shared with you', time: '2 hours ago' },
-      { id: 2, message: 'Storage space running low', time: '1 day ago' },
-    ]);
+    try {
+      const response = await fetch(`${API_BASE}/notifications`, {
+        headers: getAuthHeaders(),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setNotifications(data.notifications || []);
+      }
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+    }
   };
 
+  // Fetch storage info
   const fetchStorageInfo = async () => {
-    setStorageUsed(45); // 45%
+    try {
+      const response = await fetch(`${API_BASE}/storage/info`, {
+        headers: getAuthHeaders(),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setStorageInfo(data);
+      }
+    } catch (error) {
+      console.error('Error fetching storage info:', error);
+    }
   };
 
+  // Fetch recent activities
   const fetchRecentActivities = async () => {
-    setRecentActivities([
-      { id: 1, action: 'File upload', user: 'You', time: '1 hour ago' },
-      { id: 2, action: 'File shared', user: 'John', time: '2 hours ago' },
-    ]);
+    try {
+      const response = await fetch(`${API_BASE}/activities`, {
+        headers: getAuthHeaders(),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setRecentActivities(data.activities || []);
+      }
+    } catch (error) {
+      console.error('Error fetching activities:', error);
+    }
   };
 
+  // Fetch team members
   const fetchTeamMembers = async () => {
-    setTeamMembers([
-      { id: 1, name: 'John Doe', role: 'Admin' },
-      { id: 2, name: 'Jane Smith', role: 'Editor' },
-    ]);
+    try {
+      const response = await fetch(`${API_BASE}/team/members`, {
+        headers: getAuthHeaders(),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setTeamMembers(data.members || []);
+      }
+    } catch (error) {
+      console.error('Error fetching team members:', error);
+    }
   };
 
+  // Handle file upload
   const handleUpload = async () => {
-    if (!selectedFile) return;
+    if (!selectedFile) {
+      showMessage('Please select a file', 'error');
+      return;
+    }
 
+    setUploading(true);
     setUploadProgress(0);
-    const interval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+
+      const xhr = new XMLHttpRequest();
+
+      // Track upload progress
+      xhr.upload.addEventListener('progress', (event) => {
+        if (event.lengthComputable) {
+          const percentComplete = (event.loaded / event.total) * 100;
+          setUploadProgress(percentComplete);
+        }
+      });
+
+      // Handle completion
+      xhr.addEventListener('load', () => {
+        if (xhr.status === 201) {
+          showMessage('File uploaded successfully!');
           setUploadDialog(false);
           setSelectedFile(null);
-          // Refresh files list
-          fetchFiles();
-          return 100;
+          fetchFiles(); // Refresh files list
+          fetchStorageInfo(); // Refresh storage info
+          fetchRecentActivities(); // Refresh activities
+        } else {
+          const response = JSON.parse(xhr.responseText);
+          showMessage(response.message || 'Upload failed', 'error');
         }
-        return prev + 10;
+        setUploading(false);
+        setUploadProgress(0);
       });
-    }, 500);
+
+      // Handle errors
+      xhr.addEventListener('error', () => {
+        showMessage('Upload failed', 'error');
+        setUploading(false);
+        setUploadProgress(0);
+      });
+
+      xhr.open('POST', `${API_BASE}/files/upload`);
+      xhr.setRequestHeader('Authorization', `Bearer ${localStorage.getItem('token')}`);
+      xhr.send(formData);
+
+    } catch (error) {
+      console.error('Upload error:', error);
+      showMessage('Upload failed', 'error');
+      setUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
+  // Handle file deletion
+  const handleDeleteFile = async (fileId, fileName) => {
+    if (!window.confirm(`Are you sure you want to delete "${fileName}"?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/files/${fileId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+
+      if (response.ok) {
+        showMessage('File deleted successfully!');
+        fetchFiles(); // Refresh files list
+        fetchStorageInfo(); // Refresh storage info
+        fetchRecentActivities(); // Refresh activities
+      } else {
+        const data = await response.json();
+        showMessage(data.message || 'Delete failed', 'error');
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+      showMessage('Delete failed', 'error');
+    }
+  };
+
+  // Handle file download
+  const handleDownloadFile = (fileName, originalName) => {
+    // Create download link
+    const link = document.createElement('a');
+    link.href = `${API_BASE}/files/download/${fileName}`;
+    link.download = originalName;
+    link.click();
+  };
+
+  // Handle refresh
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchAllData();
+    setRefreshing(false);
+    showMessage('Dashboard refreshed!');
   };
 
   const handleFileSelect = (event) => {
-    setSelectedFile(event.target.files[0]);
+    const file = event.target.files[0];
+    if (file) {
+      // Check file size (10MB limit)
+      if (file.size > 10 * 1024 * 1024) {
+        showMessage('File size must be less than 10MB', 'error');
+        return;
+      }
+      setSelectedFile(file);
+    }
   };
 
   const handleLogout = () => {
@@ -190,10 +389,34 @@ const Dashboard = () => {
     setAnchorEl(null);
   };
 
+  // Mark notification as read
+  const markNotificationAsRead = async (notificationId) => {
+    try {
+      await fetch(`${API_BASE}/notifications/${notificationId}/read`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+      });
+      fetchNotifications(); // Refresh notifications
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
+  };
+
+  // Filter files based on search query
+  const filteredFiles = files.filter(file =>
+    file.original_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    file.type.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Calculate storage percentage
+  const storagePercentage = storageInfo.totalSpace > 0 
+    ? (storageInfo.usedSpace / storageInfo.totalSpace) * 100 
+    : 0;
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <LinearProgress sx={{ width: '50%' }} />
+        <CircularProgress />
       </Box>
     );
   }
@@ -247,7 +470,7 @@ const Dashboard = () => {
           
           <TextField
             size="small"
-            placeholder="Search..."
+            placeholder="Search files..."
             sx={{ 
               mr: 2,
               backgroundColor: 'rgba(255, 255, 255, 0.15)',
@@ -258,8 +481,12 @@ const Dashboard = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
 
-          <IconButton color="inherit" onClick={() => {}}>
-            <Badge badgeContent={notifications.length} color="error">
+          <IconButton color="inherit" onClick={handleRefresh} disabled={refreshing}>
+            <Refresh />
+          </IconButton>
+
+          <IconButton color="inherit">
+            <Badge badgeContent={notifications.filter(n => !n.read).length} color="error">
               <Notifications />
             </Badge>
           </IconButton>
@@ -298,6 +525,9 @@ const Dashboard = () => {
                   <Typography color="textSecondary">
                     Email: {user?.email}
                   </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    Member since: {user?.created_at ? formatDate(user.created_at) : 'N/A'}
+                  </Typography>
                 </Box>
               </Box>
             </Paper>
@@ -312,11 +542,15 @@ const Dashboard = () => {
                 </Typography>
                 <LinearProgress 
                   variant="determinate" 
-                  value={storageUsed} 
+                  value={storagePercentage} 
                   sx={{ mb: 1 }}
+                  color={storagePercentage > 80 ? 'error' : 'primary'}
                 />
                 <Typography variant="body2" color="textSecondary">
-                  {storageUsed}% of 100GB used
+                  {formatFileSize(storageInfo.usedSpace)} of {formatFileSize(storageInfo.totalSpace)} used
+                </Typography>
+                <Typography variant="body2" color="textSecondary">
+                  {formatFileSize(storageInfo.availableSpace)} available
                 </Typography>
               </CardContent>
             </Card>
@@ -331,6 +565,9 @@ const Dashboard = () => {
                 <Typography variant="h4">
                   {teamMembers.length}
                 </Typography>
+                <Typography variant="body2" color="textSecondary">
+                  Active collaborators
+                </Typography>
               </CardContent>
             </Card>
           </Grid>
@@ -344,6 +581,9 @@ const Dashboard = () => {
                 <Typography variant="h4">
                   {files.length}
                 </Typography>
+                <Typography variant="body2" color="textSecondary">
+                  Files uploaded
+                </Typography>
               </CardContent>
             </Card>
           </Grid>
@@ -353,7 +593,7 @@ const Dashboard = () => {
             <Paper sx={{ p: 2 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
                 <Typography variant="h6">
-                  Files
+                  Files ({filteredFiles.length})
                 </Typography>
                 <Button
                   variant="contained"
@@ -364,36 +604,50 @@ const Dashboard = () => {
                 </Button>
               </Box>
               
-              <List>
-                {files.map((file) => (
-                  <React.Fragment key={file.id}>
-                    <ListItem
-                      secondaryAction={
-                        <Stack direction="row" spacing={1}>
-                          <IconButton size="small">
-                            <Download />
-                          </IconButton>
-                          <IconButton size="small">
-                            <Share />
-                          </IconButton>
-                          <IconButton size="small">
-                            <Delete />
-                          </IconButton>
-                        </Stack>
-                      }
-                    >
-                      <ListItemIcon>
-                        <InsertDriveFile />
-                      </ListItemIcon>
-                      <ListItemText 
-                        primary={file.name}
-                        secondary={`${file.size} • Last modified: ${file.lastModified}`}
-                      />
-                    </ListItem>
-                    <Divider />
-                  </React.Fragment>
-                ))}
-              </List>
+              {filteredFiles.length === 0 ? (
+                <Box sx={{ textAlign: 'center', py: 4 }}>
+                  <Typography color="textSecondary">
+                    {searchQuery ? 'No files match your search' : 'No files uploaded yet'}
+                  </Typography>
+                </Box>
+              ) : (
+                <List>
+                  {filteredFiles.map((file) => (
+                    <React.Fragment key={file.id}>
+                      <ListItem
+                        secondaryAction={
+                          <Stack direction="row" spacing={1}>
+                            <IconButton 
+                              size="small"
+                              onClick={() => handleDownloadFile(file.filename, file.original_name)}
+                            >
+                              <Download />
+                            </IconButton>
+                            <IconButton size="small">
+                              <Share />
+                            </IconButton>
+                            <IconButton 
+                              size="small"
+                              onClick={() => handleDeleteFile(file.id, file.original_name)}
+                            >
+                              <Delete />
+                            </IconButton>
+                          </Stack>
+                        }
+                      >
+                        <ListItemIcon>
+                          <InsertDriveFile />
+                        </ListItemIcon>
+                        <ListItemText 
+                          primary={file.original_name}
+                          secondary={`${formatFileSize(file.size)} • ${file.type} • ${formatDate(file.created_at)}`}
+                        />
+                      </ListItem>
+                      <Divider />
+                    </React.Fragment>
+                  ))}
+                </List>
+              )}
             </Paper>
           </Grid>
 
@@ -403,16 +657,20 @@ const Dashboard = () => {
               <Typography variant="h6" gutterBottom>
                 Recent Activity
               </Typography>
-              <List>
-                {recentActivities.map((activity) => (
-                  <ListItem key={activity.id}>
-                    <ListItemText
-                      primary={activity.action}
-                      secondary={`${activity.user} • ${activity.time}`}
-                    />
-                  </ListItem>
-                ))}
-              </List>
+              {recentActivities.length === 0 ? (
+                <Typography color="textSecondary">No recent activity</Typography>
+              ) : (
+                <List>
+                  {recentActivities.slice(0, 5).map((activity) => (
+                    <ListItem key={activity.id}>
+                      <ListItemText
+                        primary={activity.action}
+                        secondary={formatDate(activity.created_at)}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              )}
             </Paper>
           </Grid>
 
@@ -422,43 +680,66 @@ const Dashboard = () => {
               <Typography variant="h6" gutterBottom>
                 Team Members
               </Typography>
-              <List>
-                {teamMembers.map((member) => (
-                  <ListItem key={member.id}>
-                    <ListItemIcon>
-                      <Avatar>{member.name[0]}</Avatar>
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={member.name}
-                      secondary={member.role}
-                    />
-                  </ListItem>
-                ))}
-              </List>
+              {teamMembers.length === 0 ? (
+                <Typography color="textSecondary">No team members</Typography>
+              ) : (
+                <List>
+                  {teamMembers.slice(0, 5).map((member) => (
+                    <ListItem key={member.id}>
+                      <ListItemIcon>
+                        <Avatar sx={{ width: 32, height: 32 }}>
+                          {member.username?.[0]?.toUpperCase() || member.name?.[0]?.toUpperCase()}
+                        </Avatar>
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={member.username || member.name}
+                        secondary={member.role}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              )}
             </Paper>
           </Grid>
         </Grid>
       </Container>
 
       {/* Upload Dialog */}
-      <Dialog open={uploadDialog} onClose={() => setUploadDialog(false)}>
+      <Dialog open={uploadDialog} onClose={() => !uploading && setUploadDialog(false)}>
         <DialogTitle>Upload File</DialogTitle>
         <DialogContent>
-          <Box sx={{ p: 2 }}>
+          <Box sx={{ p: 2, minWidth: 400 }}>
             <input
               type="file"
               onChange={handleFileSelect}
-              style={{ marginBottom: 16 }}
+              style={{ marginBottom: 16, width: '100%' }}
+              disabled={uploading}
             />
-            {uploadProgress > 0 && (
-              <LinearProgress variant="determinate" value={uploadProgress} />
+            {selectedFile && (
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                Selected: {selectedFile.name} ({formatFileSize(selectedFile.size)})
+              </Typography>
+            )}
+            {uploading && (
+              <Box sx={{ mb: 2 }}>
+                <LinearProgress variant="determinate" value={uploadProgress} />
+                <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+                  Uploading... {Math.round(uploadProgress)}%
+                </Typography>
+              </Box>
             )}
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setUploadDialog(false)}>Cancel</Button>
-          <Button onClick={handleUpload} disabled={!selectedFile}>
-            Upload
+          <Button onClick={() => setUploadDialog(false)} disabled={uploading}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleUpload} 
+            disabled={!selectedFile || uploading}
+            variant="contained"
+          >
+            {uploading ? 'Uploading...' : 'Upload'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -489,6 +770,22 @@ const Dashboard = () => {
           Logout
         </MenuItem>
       </Menu>
+
+      {/* Snackbar for messages */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert 
+          onClose={() => setSnackbar({ ...snackbar, open: false })} 
+          severity={snackbar.severity}
+          variant="filled"
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
