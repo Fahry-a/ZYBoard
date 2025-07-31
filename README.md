@@ -1,5 +1,7 @@
 # 📦 ZYBoard
 
+note: this priject was create by ai github copilot 60%, this project for testing github copilot generating code.
+
 **ZYBoard** adalah platform backend penyimpanan cloud ringan berbasis WebDAV dan MySQL, dibangun dengan stack modern seperti Express.js dan Next.js. Dirancang untuk menjadi alternatif open-source minimalis seperti Nextcloud atau OwnCloud, ZYBoard cocok untuk project personal, pendidikan, maupun prototype bisnis kecil.
 
 ---
