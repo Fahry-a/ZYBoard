@@ -1,174 +1,156 @@
-import React, { useState } from 'react';
-import { 
-  CssBaseline, 
-  Box, 
-  Drawer, 
-  AppBar, 
-  Toolbar, 
-  List, 
-  Typography,
-  Divider,
-  IconButton,
-  Container,
-  Grid,
-  ListItem,
-  ListItemIcon,
-  ListItemText
-} from '@mui/material';
-import {
-  Menu as MenuIcon,
-  ChevronLeft as ChevronLeftIcon,
-  Storage as StorageIcon,
-} from '@mui/icons-material';
-import { styled } from '@mui/material/styles';
-import FileList from './FileList';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 
-function Dashboard() {
-  const [open, setOpen] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+const Dashboard = () => {
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const navigate = useNavigate();
 
-  // Otomatis close drawer pada mobile view
-  useEffect(() => {
-    if (isMobile) {
-      setOpen(false);
+    useEffect(() => {
+        // Check authentication status when component mounts
+        const checkAuth = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    navigate('/login');
+                    return;
+                }
+
+                const response = await axios.get('http://localhost:5000/api/user/profile', {
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                });
+
+                setUser(response.data);
+                setLoading(false);
+            } catch (error) {
+                console.error('Authentication error:', error);
+                localStorage.removeItem('token');
+                navigate('/login');
+            }
+        };
+
+        checkAuth();
+    }, [navigate]);
+
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        navigate('/login');
+    };
+
+    if (loading) {
+        return <div>Loading...</div>;
     }
-  }, [isMobile]);
 
-  const toggleDrawer = () => {
-    setOpen(!open);
-  };
+    return (
+        <div className="dashboard-container">
+            <nav className="dashboard-nav">
+                <h1>Dashboard</h1>
+                <button onClick={handleLogout} className="logout-btn">
+                    Logout
+                </button>
+            </nav>
+            
+            <div className="dashboard-content">
+                <div className="user-info">
+                    <h2>Welcome, {user?.name || 'User'}</h2>
+                    <p>Email: {user?.email}</p>
+                </div>
+                
+                <div className="dashboard-stats">
+                    {/* Add your dashboard statistics or content here */}
+                    <div className="stat-card">
+                        <h3>Total Projects</h3>
+                        <p>0</p>
+                    </div>
+                    <div className="stat-card">
+                        <h3>Active Tasks</h3>
+                        <p>0</p>
+                    </div>
+                    <div className="stat-card">
+                        <h3>Completed Tasks</h3>
+                        <p>0</p>
+                    </div>
+                </div>
 
-  return (
-    <AppWrapper>
-      <CssBaseline />
-      <StyledAppBar 
-        position="absolute" 
-        open={open}
-        sx={{
-          width: isMobile ? '100%' : (open ? `calc(100% - ${drawerWidth}px)` : '100%')
-        }}
-      >
-        <Toolbar>
-          <IconButton
-            edge="start"
-            color="inherit"
-            aria-label="toggle drawer"
-            onClick={toggleDrawer}
-            sx={{ marginRight: '36px' }}
-          >
-            <MenuIcon />
-          </IconButton>
-          <Typography
-            component="h1"
-            variant="h6"
-            color="inherit"
-            noWrap
-            sx={{ flexGrow: 1 }}
-          >
-            Cloud Storage Dashboard
-          </Typography>
-        </Toolbar>
-      </StyledAppBar>
-      
-      <StyledDrawer 
-        variant={isMobile ? "temporary" : "permanent"} 
-        open={open}
-        onClose={isMobile ? toggleDrawer : undefined}
-      >
-        <Toolbar
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'flex-end',
-            px: [1],
-          }}
-        >
-          <IconButton onClick={toggleDrawer}>
-            <ChevronLeftIcon />
-          </IconButton>
-        </Toolbar>
-        <Divider />
-        <List>
-          <ListItem button>
-            <ListItemIcon>
-              <StorageIcon />
-            </ListItemIcon>
-            <ListItemText primary="My Files" />
-          </ListItem>
-        </List>
-      </StyledDrawer>
+                <div className="recent-activity">
+                    <h3>Recent Activity</h3>
+                    <div className="activity-list">
+                        <p>No recent activity</p>
+                    </div>
+                </div>
+            </div>
 
-      <Box
-        component="main"
-        sx={{
-          backgroundColor: (theme) =>
-            theme.palette.mode === 'light'
-              ? theme.palette.grey[100]
-              : theme.palette.grey[900],
-          flexGrow: 1,
-          height: '100vh',
-          overflow: 'auto',
-          paddingTop: '64px',
-          width: '100%'
-        }}
-      >
-        <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          )}
-          
-          {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-              <CircularProgress />
-            </Box>
-          ) : (
-            <Grid container spacing={3}>
-              <Grid item xs={12}>
-                <FileList onError={setError} onLoading={setLoading} />
-              </Grid>
-            </Grid>
-          )}
-        </Container>
-      </Box>
-    </AppWrapper>
-  );
-}
+            <style jsx>{`
+                .dashboard-container {
+                    padding: 20px;
+                    max-width: 1200px;
+                    margin: 0 auto;
+                }
 
-// Style components
-const drawerWidth = 240;
+                .dashboard-nav {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 30px;
+                    padding: 10px 0;
+                    border-bottom: 1px solid #eee;
+                }
 
-const AppWrapper = styled('div')(({ theme }) => ({
-  display: 'flex',
-  [theme.breakpoints.down('sm')]: {
-    flexDirection: 'column'
-  }
-}));
+                .logout-btn {
+                    padding: 8px 16px;
+                    background-color: #dc3545;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                }
 
-const StyledAppBar = styled(AppBar, {
-  shouldForwardProp: (prop) => prop !== 'open',
-})(({ theme, open }) => ({
-  zIndex: theme.zIndex.drawer + 1,
-  transition: theme.transitions.create(['width', 'margin'], {
-    easing: theme.transitions.easing.sharp,
-    duration: theme.transitions.duration.leavingScreen,
-  }),
-  ...(open && {
-    marginLeft: drawerWidth,
-    width: `calc(100% - ${drawerWidth}px)`,
-    transition: theme.transitions.create(['width', 'margin'], {
-      easing: theme.transitions.easing.sharp,
-      duration: theme.transitions.duration.enteringScreen,
-    }),
-  }),
-  [theme.breakpoints.down('sm')]: {
-    width: '100%',
-    marginLeft: 0
-  }
-}));
+                .logout-btn:hover {
+                    background-color: #c82333;
+                }
+
+                .dashboard-content {
+                    display: grid;
+                    gap: 20px;
+                }
+
+                .user-info {
+                    background: #f8f9fa;
+                    padding: 20px;
+                    border-radius: 8px;
+                    margin-bottom: 20px;
+                }
+
+                .dashboard-stats {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                    gap: 20px;
+                    margin-bottom: 30px;
+                }
+
+                .stat-card {
+                    background: white;
+                    padding: 20px;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }
+
+                .recent-activity {
+                    background: white;
+                    padding: 20px;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }
+
+                .activity-list {
+                    margin-top: 15px;
+                }
+            `}</style>
+        </div>
+    );
+};
 
 export default Dashboard;

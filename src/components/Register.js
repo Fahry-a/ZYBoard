@@ -1,231 +1,244 @@
 import React, { useState } from 'react';
-import {
-  Box,
-  Card,
-  CardContent,
-  TextField,
-  Button,
-  Typography,
-  IconButton,
-  InputAdornment,
-  Link,
-  Alert,
-  CircularProgress,
-} from '@mui/material';
-import {
-  Visibility,
-  VisibilityOff,
-  DarkMode,
-  LightMode,
-} from '@mui/icons-material';
-import { useTheme } from '../contexts/ThemeContext';
+import { Link, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
-function Register({ onToggleForm }) {
-  const [showPassword, setShowPassword] = useState(false);
-  const [formData, setFormData] = useState({
-    username: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-  });
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const { darkMode, toggleDarkMode } = useTheme();
+const Register = () => {
+    const navigate = useNavigate();
+    const [formData, setFormData] = useState({
+        name: '',
+        email: '',
+        password: '',
+        confirmPassword: ''
+    });
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
 
-  // Validasi password yang lebih kuat
-  const validatePassword = (password) => {
-    const minLength = 8;
-    const hasUpperCase = /[A-Z]/.test(password);
-    const hasLowerCase = /[a-z]/.test(password);
-    const hasNumbers = /\d/.test(password);
-    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+    const { name, email, password, confirmPassword } = formData;
 
-    if (password.length < minLength) {
-      return 'Password must be at least 8 characters long';
-    }
-    if (!hasUpperCase || !hasLowerCase) {
-      return 'Password must contain both uppercase and lowercase letters';
-    }
-    if (!hasNumbers) {
-      return 'Password must contain at least one number';
-    }
-    if (!hasSpecialChar) {
-      return 'Password must contain at least one special character';
-    }
-    return '';
-  };
+    const handleChange = (e) => {
+        setFormData({
+            ...formData,
+            [e.target.name]: e.target.value
+        });
+    };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
+    const validateForm = () => {
+        if (!name || !email || !password || !confirmPassword) {
+            setError('All fields are required');
+            return false;
+        }
 
-    // Validasi password
-    const passwordError = validatePassword(formData.password);
-    if (passwordError) {
-      setError(passwordError);
-      setLoading(false);
-      return;
-    }
+        if (password !== confirmPassword) {
+            setError('Passwords do not match');
+            return false;
+        }
 
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      setLoading(false);
-      return;
-    }
+        if (password.length < 6) {
+            setError('Password must be at least 6 characters long');
+            return false;
+        }
 
-    try {
-      const response = await fetch('http://localhost:3030/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          username: formData.username,
-          email: formData.email,
-          password: formData.password // Add password to request
-        }),
-        credentials: 'include'
-      });
+        // Basic email validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            setError('Please enter a valid email address');
+            return false;
+        }
 
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || 'Registration failed');
-      }
+        return true;
+    };
 
-      onToggleForm(); // Switch to login form after successful registration
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        
+        if (!validateForm()) {
+            return;
+        }
 
-  return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        p: 2,
-        background: (theme) =>
-          theme.palette.mode === 'dark'
-            ? 'linear-gradient(45deg, #1a237e 30%, #311b92 90%)'
-            : 'linear-gradient(45deg, #bbdefb 30%, #e3f2fd 90%)',
-      }}
-    >
-      <Card sx={{ maxWidth: 400, width: '100%' }}>
-        <CardContent sx={{ p: 3 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-            <Typography variant="h5" component="h1" fontWeight="500">
-              Sign Up
-            </Typography>
-            <IconButton onClick={toggleDarkMode} size="small">
-              {darkMode ? <LightMode /> : <DarkMode />}
-            </IconButton>
-          </Box>
+        try {
+            setLoading(true);
+            setError('');
 
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          )}
+            const response = await axios.post('http://localhost:5000/api/auth/register', {
+                name,
+                email,
+                password
+            });
 
-          <form onSubmit={handleSubmit}>
-            <TextField
-              fullWidth
-              label="Username"
-              name="username"
-              value={formData.username}
-              onChange={handleChange}
-              margin="normal"
-              variant="outlined"
-              required
-              disabled={loading}
-            />
-            <TextField
-              fullWidth
-              label="Email"
-              name="email"
-              type="email"
-              value={formData.email}
-              onChange={handleChange}
-              margin="normal"
-              variant="outlined"
-              required
-              disabled={loading}
-            />
-            <TextField
-              fullWidth
-              label="Password"
-              name="password"
-              type={showPassword ? 'text' : 'password'}
-              value={formData.password}
-              onChange={handleChange}
-              margin="normal"
-              variant="outlined"
-              required
-              disabled={loading}
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      onClick={() => setShowPassword(!showPassword)}
-                      edge="end"
-                      disabled={loading}
+            if (response.data.token) {
+                localStorage.setItem('token', response.data.token);
+                navigate('/dashboard');
+            }
+        } catch (err) {
+            setError(err.response?.data?.message || 'An error occurred during registration');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="register-container">
+            <div className="register-form-container">
+                <h1>Create Account</h1>
+                {error && <div className="error-message">{error}</div>}
+                
+                <form onSubmit={handleSubmit}>
+                    <div className="form-group">
+                        <label htmlFor="name">Full Name</label>
+                        <input
+                            type="text"
+                            id="name"
+                            name="name"
+                            value={name}
+                            onChange={handleChange}
+                            placeholder="Enter your full name"
+                        />
+                    </div>
+
+                    <div className="form-group">
+                        <label htmlFor="email">Email Address</label>
+                        <input
+                            type="email"
+                            id="email"
+                            name="email"
+                            value={email}
+                            onChange={handleChange}
+                            placeholder="Enter your email"
+                        />
+                    </div>
+
+                    <div className="form-group">
+                        <label htmlFor="password">Password</label>
+                        <input
+                            type="password"
+                            id="password"
+                            name="password"
+                            value={password}
+                            onChange={handleChange}
+                            placeholder="Enter your password"
+                        />
+                    </div>
+
+                    <div className="form-group">
+                        <label htmlFor="confirmPassword">Confirm Password</label>
+                        <input
+                            type="password"
+                            id="confirmPassword"
+                            name="confirmPassword"
+                            value={confirmPassword}
+                            onChange={handleChange}
+                            placeholder="Confirm your password"
+                        />
+                    </div>
+
+                    <button 
+                        type="submit" 
+                        className="register-button"
+                        disabled={loading}
                     >
-                      {showPassword ? <VisibilityOff /> : <Visibility />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-            />
-            <TextField
-              fullWidth
-              label="Confirm Password"
-              name="confirmPassword"
-              type={showPassword ? 'text' : 'password'}
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              margin="normal"
-              variant="outlined"
-              required
-              disabled={loading}
-            />
-            <Button
-              fullWidth
-              type="submit"
-              variant="contained"
-              sx={{ mt: 3, mb: 2 }}
-              disabled={loading}
-            >
-              {loading ? (
-                <CircularProgress size={24} color="inherit" />
-              ) : (
-                'Sign Up'
-              )}
-            </Button>
-          </form>
-          
-          {/* Updated Sign In link */}
-          <Box sx={{ textAlign: 'center' }}>
-            <Typography variant="body2" display="inline">
-              Already have an account?{' '}
-            </Typography>
-            <Button
-              variant="text"
-              onClick={handleSignInClick}
-              disabled={loading}
-              sx={{ textTransform: 'none' }}
-            >
-              Sign In
-            </Button>
-          </Box>
-        </CardContent>
-      </Card>
-    </Box>
-  );
-}
+                        {loading ? 'Creating Account...' : 'Register'}
+                    </button>
+                </form>
+
+                <p className="login-link">
+                    Already have an account? <Link to="/login">Login here</Link>
+                </p>
+            </div>
+
+            <style jsx>{`
+                .register-container {
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    min-height: 100vh;
+                    background-color: #f5f5f5;
+                    padding: 20px;
+                }
+
+                .register-form-container {
+                    background: white;
+                    padding: 40px;
+                    border-radius: 10px;
+                    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+                    width: 100%;
+                    max-width: 400px;
+                }
+
+                h1 {
+                    text-align: center;
+                    margin-bottom: 30px;
+                    color: #333;
+                }
+
+                .error-message {
+                    background-color: #ffe6e6;
+                    color: #dc3545;
+                    padding: 10px;
+                    border-radius: 4px;
+                    margin-bottom: 20px;
+                    text-align: center;
+                }
+
+                .form-group {
+                    margin-bottom: 20px;
+                }
+
+                label {
+                    display: block;
+                    margin-bottom: 5px;
+                    color: #555;
+                }
+
+                input {
+                    width: 100%;
+                    padding: 10px;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    font-size: 16px;
+                }
+
+                input:focus {
+                    outline: none;
+                    border-color: #4a90e2;
+                }
+
+                .register-button {
+                    width: 100%;
+                    padding: 12px;
+                    background-color: #4a90e2;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    font-size: 16px;
+                    cursor: pointer;
+                    margin-top: 10px;
+                }
+
+                .register-button:hover {
+                    background-color: #357abd;
+                }
+
+                .register-button:disabled {
+                    background-color: #cccccc;
+                    cursor: not-allowed;
+                }
+
+                .login-link {
+                    text-align: center;
+                    margin-top: 20px;
+                }
+
+                .login-link a {
+                    color: #4a90e2;
+                    text-decoration: none;
+                }
+
+                .login-link a:hover {
+                    text-decoration: underline;
+                }
+            `}</style>
+        </div>
+    );
+};
 
 export default Register;
