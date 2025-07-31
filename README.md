@@ -30,16 +30,17 @@ note: this priject was create by ai github copilot 60%, this project for testing
 
 ## 🛠️ Instalasi Lokal
 
-```bash clone repository
+```bash
+# Clone repository
 git clone https://github.com/fahry-a/zyboard.git
 
-```bash cd to folders
+# Masuk ke folder proyek
 cd zyboard
 
-```bash
+# Install dependensi
 npm install
 
-```bash
-npm run dev
+# install dependensi server
+cd ../
 
 indev
