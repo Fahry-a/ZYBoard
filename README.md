@@ -30,12 +30,15 @@ note: this priject was create by ai github copilot 60%, this project for testing
 
 ## 🛠️ Instalasi Lokal
 
-```bash
+```bash clone repository
 git clone https://github.com/fahry-a/zyboard.git
-```bash
+
+```bash cd to folders
 cd zyboard
+
 ```bash
 npm install
+
 ```bash
 npm run dev
 
