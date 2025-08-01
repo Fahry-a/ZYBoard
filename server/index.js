@@ -6,9 +6,11 @@ const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs').promises;
 
 dotenv.config();
+
+const webdavService = require('./services/webdavService');
+
 
 const app = express();
 
@@ -16,41 +18,15 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Create uploads directory if it doesn't exist
-const createUploadsDir = async () => {
-    try {
-        await fs.mkdir('uploads', { recursive: true });
-    } catch (error) {
-        console.error('Error creating uploads directory:', error);
-    }
-};
-
-// Multer configuration for file uploads
-const storage = multer.diskStorage({
-  destination: async function (req, file, cb) {
-    const userFolder = `uploads/${req.user.id}`;
-    try {
-        await fs.mkdir(userFolder, { recursive: true });
-        cb(null, userFolder);
-    } catch (err) {
-        cb(err);
-    }
-  },
-  filename: function (req, file, cb) {
-    // Generate unique filename
-    const uniqueName = Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname);
-    cb(null, uniqueName);
-  }
-});
-
+// Memory storage for multer (we'll upload to WebDAV instead of disk)
+const storage = multer.memoryStorage();
 const upload = multer({ 
   storage: storage,
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB limit
   },
   fileFilter: function (req, file, cb) {
-    // Add basic file type validation
-    const allowedTypes = /jpeg|jpg|png|gif|pdf|doc|docx|txt|zip|rar/;
+    const allowedTypes = /jpeg|jpg|png|gif|pdf|doc|docx|txt|zip|rar|mp4|mp3/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
     const mimetype = allowedTypes.test(file.mimetype);
 
@@ -73,15 +49,23 @@ const pool = mysql.createPool({
     queueLimit: 0
 });
 
-// Test database connection
-const testConnection = async () => {
+// Test database and WebDAV connections
+const testConnections = async () => {
     try {
         const connection = await pool.getConnection();
         console.log('✅ Database connected successfully');
         connection.release();
+        
+        const webdavConnected = await webdavService.checkConnection();
+        if (webdavConnected) {
+            console.log('✅ WebDAV connected successfully');
+        } else {
+            console.log('❌ WebDAV connection failed');
+        }
+        
         return true;
     } catch (error) {
-        console.error('❌ Database connection failed:', error);
+        console.error('❌ Connection test failed:', error);
         return false;
     }
 };
@@ -107,7 +91,6 @@ const verifyToken = (req, res, next) => {
 const errorHandler = (err, req, res, next) => {
     console.error(err.stack);
     
-    // Handle multer errors
     if (err instanceof multer.MulterError) {
         if (err.code === 'LIMIT_FILE_SIZE') {
             return res.status(400).json({ message: 'File too large. Maximum size is 10MB.' });
@@ -115,7 +98,6 @@ const errorHandler = (err, req, res, next) => {
         return res.status(400).json({ message: err.message });
     }
     
-    // Handle file type errors
     if (err.message === 'Only specific file types are allowed') {
         return res.status(400).json({ message: 'File type not allowed' });
     }
@@ -126,7 +108,7 @@ const errorHandler = (err, req, res, next) => {
     });
 };
 
-// Auth Routes
+// Auth Routes (unchanged)
 app.post('/api/auth/register', async (req, res) => {
     try {
         const { username, email, password } = req.body;
@@ -135,7 +117,6 @@ app.post('/api/auth/register', async (req, res) => {
             return res.status(400).json({ message: 'All fields are required' });
         }
 
-        // Basic validation
         if (password.length < 6) {
             return res.status(400).json({ message: 'Password must be at least 6 characters long' });
         }
@@ -143,7 +124,6 @@ app.post('/api/auth/register', async (req, res) => {
         const connection = await pool.getConnection();
 
         try {
-            // Check existing user
             const [existingUsers] = await connection.execute(
                 'SELECT * FROM users WHERE username = ? OR email = ?',
                 [username, email]
@@ -153,29 +133,24 @@ app.post('/api/auth/register', async (req, res) => {
                 return res.status(400).json({ message: 'Username or email already exists' });
             }
 
-            // Hash password
             const hashedPassword = await bcrypt.hash(password, 10);
 
-            // Insert user
             const [result] = await connection.execute(
                 'INSERT INTO users (username, email, password) VALUES (?, ?, ?)',
                 [username, email, hashedPassword]
             );
 
-            // Create default storage allocation (1GB)
             await connection.execute(
                 'INSERT INTO storage_allocation (user_id, total_space, used_space) VALUES (?, ?, ?)',
-                [result.insertId, 1024 * 1024 * 1024, 0] // 1GB default storage
+                [result.insertId, 1024 * 1024 * 1024, 0]
             );
 
-            // Generate token
             const token = jwt.sign(
                 { id: result.insertId, username },
                 process.env.JWT_SECRET || 'your-secret-key',
                 { expiresIn: '24h' }
             );
 
-            // Log activity
             await connection.execute(
                 'INSERT INTO activities (user_id, action) VALUES (?, ?)',
                 [result.insertId, 'Account created']
@@ -232,7 +207,6 @@ app.post('/api/auth/login', async (req, res) => {
                 { expiresIn: '24h' }
             );
 
-            // Log activity
             await connection.execute(
                 'INSERT INTO activities (user_id, action) VALUES (?, ?)',
                 [user.id, 'User logged in']
@@ -255,7 +229,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
-// File Routes
+// File Routes with WebDAV Integration
 app.post('/api/files/upload', verifyToken, upload.single('file'), async (req, res) => {
     try {
         if (!req.file) {
@@ -272,10 +246,9 @@ app.post('/api/files/upload', verifyToken, upload.single('file'), async (req, re
             );
 
             if (storage.length === 0) {
-                // Create default storage allocation if not exists
                 await connection.execute(
                     'INSERT INTO storage_allocation (user_id, total_space, used_space) VALUES (?, ?, ?)',
-                    [req.user.id, 1024 * 1024 * 1024, 0] // 1GB default
+                    [req.user.id, 1024 * 1024 * 1024, 0]
                 );
                 storage.push({ total_space: 1024 * 1024 * 1024, used_space: 0 });
             }
@@ -284,10 +257,14 @@ app.post('/api/files/upload', verifyToken, upload.single('file'), async (req, re
             const newUsedSpace = storage[0].used_space + fileSize;
 
             if (newUsedSpace > storage[0].total_space) {
-                // Delete uploaded file if storage exceeded
-                await fs.unlink(req.file.path).catch(console.error);
                 return res.status(400).json({ message: 'Storage limit exceeded' });
             }
+
+            // Generate unique filename
+            const uniqueName = Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(req.file.originalname);
+            
+            // Upload to WebDAV
+            const webdavPath = await webdavService.uploadFile(req.user.id, uniqueName, req.file.buffer);
 
             // Update storage usage
             await connection.execute(
@@ -298,7 +275,7 @@ app.post('/api/files/upload', verifyToken, upload.single('file'), async (req, re
             // Save file info to database
             const [result] = await connection.execute(
                 'INSERT INTO files (user_id, filename, original_name, size, type, path) VALUES (?, ?, ?, ?, ?, ?)',
-                [req.user.id, req.file.filename, req.file.originalname, fileSize, req.file.mimetype, req.file.path]
+                [req.user.id, uniqueName, req.file.originalname, fileSize, req.file.mimetype, webdavPath]
             );
 
             // Log activity
@@ -321,12 +298,6 @@ app.post('/api/files/upload', verifyToken, upload.single('file'), async (req, re
         }
     } catch (error) {
         console.error('File upload error:', error);
-        
-        // Clean up uploaded file if error occurs
-        if (req.file) {
-            await fs.unlink(req.file.path).catch(console.error);
-        }
-        
         res.status(500).json({ message: 'Error uploading file' });
     }
 });
@@ -356,7 +327,6 @@ app.get('/api/files/download/:filename', verifyToken, async (req, res) => {
         const connection = await pool.getConnection();
 
         try {
-            // Get file info from database
             const [files] = await connection.execute(
                 'SELECT * FROM files WHERE filename = ? AND user_id = ?',
                 [req.params.filename, req.user.id]
@@ -367,14 +337,9 @@ app.get('/api/files/download/:filename', verifyToken, async (req, res) => {
             }
 
             const file = files[0];
-            const filePath = file.path;
-
-            // Check if file exists on disk
-            try {
-                await fs.access(filePath);
-            } catch (error) {
-                return res.status(404).json({ message: 'File not found on disk' });
-            }
+            
+            // Download from WebDAV
+            const fileBuffer = await webdavService.downloadFile(req.user.id, file.filename);
 
             // Log activity
             await connection.execute(
@@ -387,9 +352,8 @@ app.get('/api/files/download/:filename', verifyToken, async (req, res) => {
             res.setHeader('Content-Type', file.type);
             res.setHeader('Content-Length', file.size);
 
-            // Stream the file
-            const fileStream = require('fs').createReadStream(filePath);
-            fileStream.pipe(res);
+            // Send the file buffer
+            res.send(fileBuffer);
 
         } finally {
             connection.release();
@@ -416,11 +380,11 @@ app.delete('/api/files/:id', verifyToken, async (req, res) => {
 
             const fileData = file[0];
 
-            // Delete physical file
+            // Delete from WebDAV
             try {
-                await fs.unlink(fileData.path);
+                await webdavService.deleteFile(req.user.id, fileData.filename);
             } catch (error) {
-                console.warn('File not found on disk:', fileData.path);
+                console.warn('File not found on WebDAV:', fileData.filename);
             }
 
             // Update storage usage
@@ -451,7 +415,7 @@ app.delete('/api/files/:id', verifyToken, async (req, res) => {
     }
 });
 
-// Storage Routes
+// Storage Routes (unchanged)
 app.get('/api/storage/info', verifyToken, async (req, res) => {
     try {
         const connection = await pool.getConnection();
@@ -463,10 +427,9 @@ app.get('/api/storage/info', verifyToken, async (req, res) => {
             );
 
             if (storage.length === 0) {
-                // Create default storage allocation if not exists
                 await connection.execute(
                     'INSERT INTO storage_allocation (user_id, total_space, used_space) VALUES (?, ?, ?)',
-                    [req.user.id, 1024 * 1024 * 1024, 0] // 1GB default
+                    [req.user.id, 1024 * 1024 * 1024, 0]
                 );
                 storage = [{ total_space: 1024 * 1024 * 1024, used_space: 0 }];
             }
@@ -485,7 +448,7 @@ app.get('/api/storage/info', verifyToken, async (req, res) => {
     }
 });
 
-// Activity Routes
+// Activity Routes (unchanged)
 app.get('/api/activities', verifyToken, async (req, res) => {
     try {
         const connection = await pool.getConnection();
@@ -506,7 +469,7 @@ app.get('/api/activities', verifyToken, async (req, res) => {
     }
 });
 
-// Team Routes
+// Team Routes (unchanged)
 app.get('/api/team/members', verifyToken, async (req, res) => {
     try {
         const connection = await pool.getConnection();
@@ -532,7 +495,7 @@ app.get('/api/team/members', verifyToken, async (req, res) => {
     }
 });
 
-// Notification Routes
+// Notification Routes (unchanged)
 app.get('/api/notifications', verifyToken, async (req, res) => {
     try {
         const connection = await pool.getConnection();
@@ -573,7 +536,7 @@ app.patch('/api/notifications/:id/read', verifyToken, async (req, res) => {
     }
 });
 
-// User Profile Routes
+// User Profile Routes (unchanged)
 app.get('/api/user/profile', verifyToken, async (req, res) => {
     try {
         const connection = await pool.getConnection();
@@ -599,11 +562,13 @@ app.get('/api/user/profile', verifyToken, async (req, res) => {
 });
 
 // Health check endpoint
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
+    const webdavStatus = await webdavService.checkConnection();
     res.json({ 
         status: 'OK', 
         timestamp: new Date().toISOString(),
-        uptime: process.uptime()
+        uptime: process.uptime(),
+        webdav: webdavStatus ? 'Connected' : 'Disconnected'
     });
 });
 
@@ -619,17 +584,13 @@ app.use('*', (req, res) => {
 const PORT = process.env.PORT || 3030;
 
 const startServer = async () => {
-    // Create uploads directory
-    await createUploadsDir();
-    
-    // Test database connection
-    const dbConnected = await testConnection();
+    const connectionsOk = await testConnections();
 
     app.listen(PORT, () => {
         console.log(`🚀 Server running on port ${PORT}`);
         console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
-        if (!dbConnected) {
-            console.warn('⚠️  Warning: Server running but database connection failed');
+        if (!connectionsOk) {
+            console.warn('⚠️  Warning: Server running but some connections failed');
         }
     });
 };

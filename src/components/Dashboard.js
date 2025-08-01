@@ -22,31 +22,20 @@ import {
   Stack,
   Chip,
   TextField,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   LinearProgress,
   Menu,
   MenuItem,
   Alert,
   Snackbar,
   CircularProgress,
+  ListItemButton,
 } from '@mui/material';
 import Badge from '@mui/material/Badge';
 import {
   Menu as MenuIcon,
   LightMode,
   DarkMode,
-  Folder,
-  InsertDriveFile,
   Logout,
-  CloudUpload,
-  AddCircle,
-  Delete,
-  Edit,
-  Share,
-  Download,
   Person,
   Settings,
   Notifications,
@@ -55,9 +44,13 @@ import {
   Group,
   BarChart,
   Refresh,
+  CloudQueue,
+  TrendingUp,
+  Schedule,
 } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { ColorModeContext } from '../App';
+import StoragePage from './StoragePage';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -65,15 +58,11 @@ const Dashboard = () => {
   const colorMode = React.useContext(ColorModeContext);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [currentPage, setCurrentPage] = useState('dashboard');
   
   // States
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [files, setFiles] = useState([]);
-  const [uploadDialog, setUploadDialog] = useState(false);
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploading, setUploading] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [storageInfo, setStorageInfo] = useState({ totalSpace: 0, usedSpace: 0, availableSpace: 0 });
@@ -91,13 +80,6 @@ const Dashboard = () => {
     return {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
-    };
-  };
-
-  const getAuthHeadersForUpload = () => {
-    const token = localStorage.getItem('token');
-    return {
-      'Authorization': `Bearer ${token}`,
     };
   };
 
@@ -146,8 +128,10 @@ const Dashboard = () => {
         const data = await response.json();
         setUser(data);
         
-        // Fetch all data
-        await fetchAllData();
+        // Fetch all data only for dashboard page
+        if (currentPage === 'dashboard') {
+          await fetchAllData();
+        }
         
       } catch (err) {
         console.error('Auth error:', err);
@@ -159,7 +143,7 @@ const Dashboard = () => {
     };
 
     checkAuth();
-  }, [navigate]);
+  }, [navigate, currentPage]);
 
   // Fetch all dashboard data
   const fetchAllData = async () => {
@@ -177,7 +161,6 @@ const Dashboard = () => {
     }
   };
 
-  // Fetch files from API
   const fetchFiles = async () => {
     try {
       const response = await fetch(`${API_BASE}/files`, {
@@ -192,11 +175,9 @@ const Dashboard = () => {
       setFiles(data.files || []);
     } catch (error) {
       console.error('Error fetching files:', error);
-      showMessage('Error loading files', 'error');
     }
   };
 
-  // Fetch notifications
   const fetchNotifications = async () => {
     try {
       const response = await fetch(`${API_BASE}/notifications`, {
@@ -212,7 +193,6 @@ const Dashboard = () => {
     }
   };
 
-  // Fetch storage info
   const fetchStorageInfo = async () => {
     try {
       const response = await fetch(`${API_BASE}/storage/info`, {
@@ -228,7 +208,6 @@ const Dashboard = () => {
     }
   };
 
-  // Fetch recent activities
   const fetchRecentActivities = async () => {
     try {
       const response = await fetch(`${API_BASE}/activities`, {
@@ -244,7 +223,6 @@ const Dashboard = () => {
     }
   };
 
-  // Fetch team members
   const fetchTeamMembers = async () => {
     try {
       const response = await fetch(`${API_BASE}/team/members`, {
@@ -260,120 +238,14 @@ const Dashboard = () => {
     }
   };
 
-  // Handle file upload
-  const handleUpload = async () => {
-    if (!selectedFile) {
-      showMessage('Please select a file', 'error');
-      return;
-    }
-
-    setUploading(true);
-    setUploadProgress(0);
-
-    try {
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-
-      const xhr = new XMLHttpRequest();
-
-      // Track upload progress
-      xhr.upload.addEventListener('progress', (event) => {
-        if (event.lengthComputable) {
-          const percentComplete = (event.loaded / event.total) * 100;
-          setUploadProgress(percentComplete);
-        }
-      });
-
-      // Handle completion
-      xhr.addEventListener('load', () => {
-        if (xhr.status === 201) {
-          showMessage('File uploaded successfully!');
-          setUploadDialog(false);
-          setSelectedFile(null);
-          fetchFiles(); // Refresh files list
-          fetchStorageInfo(); // Refresh storage info
-          fetchRecentActivities(); // Refresh activities
-        } else {
-          const response = JSON.parse(xhr.responseText);
-          showMessage(response.message || 'Upload failed', 'error');
-        }
-        setUploading(false);
-        setUploadProgress(0);
-      });
-
-      // Handle errors
-      xhr.addEventListener('error', () => {
-        showMessage('Upload failed', 'error');
-        setUploading(false);
-        setUploadProgress(0);
-      });
-
-      xhr.open('POST', `${API_BASE}/files/upload`);
-      xhr.setRequestHeader('Authorization', `Bearer ${localStorage.getItem('token')}`);
-      xhr.send(formData);
-
-    } catch (error) {
-      console.error('Upload error:', error);
-      showMessage('Upload failed', 'error');
-      setUploading(false);
-      setUploadProgress(0);
-    }
-  };
-
-  // Handle file deletion
-  const handleDeleteFile = async (fileId, fileName) => {
-    if (!window.confirm(`Are you sure you want to delete "${fileName}"?`)) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`${API_BASE}/files/${fileId}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders(),
-      });
-
-      if (response.ok) {
-        showMessage('File deleted successfully!');
-        fetchFiles(); // Refresh files list
-        fetchStorageInfo(); // Refresh storage info
-        fetchRecentActivities(); // Refresh activities
-      } else {
-        const data = await response.json();
-        showMessage(data.message || 'Delete failed', 'error');
-      }
-    } catch (error) {
-      console.error('Delete error:', error);
-      showMessage('Delete failed', 'error');
-    }
-  };
-
-  // Handle file download
-  const handleDownloadFile = (fileName, originalName) => {
-    // Create download link
-    const link = document.createElement('a');
-    link.href = `${API_BASE}/files/download/${fileName}`;
-    link.download = originalName;
-    link.click();
-  };
-
   // Handle refresh
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchAllData();
+    if (currentPage === 'dashboard') {
+      await fetchAllData();
+    }
     setRefreshing(false);
     showMessage('Dashboard refreshed!');
-  };
-
-  const handleFileSelect = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      // Check file size (10MB limit)
-      if (file.size > 10 * 1024 * 1024) {
-        showMessage('File size must be less than 10MB', 'error');
-        return;
-      }
-      setSelectedFile(file);
-    }
   };
 
   const handleLogout = () => {
@@ -389,24 +261,11 @@ const Dashboard = () => {
     setAnchorEl(null);
   };
 
-  // Mark notification as read
-  const markNotificationAsRead = async (notificationId) => {
-    try {
-      await fetch(`${API_BASE}/notifications/${notificationId}/read`, {
-        method: 'PATCH',
-        headers: getAuthHeaders(),
-      });
-      fetchNotifications(); // Refresh notifications
-    } catch (error) {
-      console.error('Error marking notification as read:', error);
-    }
+  // Navigation
+  const handleNavigation = (page) => {
+    setCurrentPage(page);
+    setDrawerOpen(false);
   };
-
-  // Filter files based on search query
-  const filteredFiles = files.filter(file =>
-    file.original_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    file.type.toLowerCase().includes(searchQuery.toLowerCase())
-  );
 
   // Calculate storage percentage
   const storagePercentage = storageInfo.totalSpace > 0 
@@ -424,32 +283,354 @@ const Dashboard = () => {
   const drawerContent = (
     <Box sx={{ width: 250 }}>
       <List>
-        <ListItem button>
+        <ListItemButton 
+          selected={currentPage === 'dashboard'}
+          onClick={() => handleNavigation('dashboard')}
+        >
           <ListItemIcon>
             <DashboardIcon />
           </ListItemIcon>
           <ListItemText primary="Dashboard" />
-        </ListItem>
-        <ListItem button>
+        </ListItemButton>
+        <ListItemButton 
+          selected={currentPage === 'storage'}
+          onClick={() => handleNavigation('storage')}
+        >
           <ListItemIcon>
             <Storage />
           </ListItemIcon>
           <ListItemText primary="Storage" />
-        </ListItem>
-        <ListItem button>
+        </ListItemButton>
+        <ListItemButton>
           <ListItemIcon>
             <Group />
           </ListItemIcon>
           <ListItemText primary="Team" />
-        </ListItem>
-        <ListItem button>
+        </ListItemButton>
+        <ListItemButton>
           <ListItemIcon>
             <BarChart />
           </ListItemIcon>
           <ListItemText primary="Analytics" />
-        </ListItem>
+        </ListItemButton>
       </List>
     </Box>
+  );
+
+  // Dashboard content component
+  const DashboardContent = () => (
+    <Container maxWidth="lg" sx={{ mt: 10, mb: 4 }}>
+      <Grid container spacing={3}>
+        {/* User Welcome Card */}
+        <Grid item xs={12}>
+          <Paper sx={{ p: 3, mb: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Avatar sx={{ width: 56, height: 56 }}>
+                {user?.username?.[0]?.toUpperCase()}
+              </Avatar>
+              <Box>
+                <Typography variant="h5" gutterBottom>
+                  Welcome back, {user?.username || 'User'}!
+                </Typography>
+                <Typography color="textSecondary">
+                  Email: {user?.email}
+                </Typography>
+                <Typography variant="body2" color="textSecondary">
+                  Member since: {user?.created_at ? formatDate(user.created_at) : 'N/A'}
+                </Typography>
+                <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Chip 
+                    icon={<CloudQueue />} 
+                    label="WebDAV Storage Active" 
+                    color="success" 
+                    size="small" 
+                  />
+                </Box>
+              </Box>
+            </Box>
+          </Paper>
+        </Grid>
+
+        {/* Quick Stats */}
+        <Grid item xs={12} md={3}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography variant="h6" gutterBottom>
+                    Storage Usage
+                  </Typography>
+                  <Typography variant="h4" color="primary">
+                    {Math.round(storagePercentage)}%
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    {formatFileSize(storageInfo.usedSpace)} used
+                  </Typography>
+                </Box>
+                <Storage sx={{ fontSize: 40, color: 'primary.main', opacity: 0.3 }} />
+              </Box>
+              <LinearProgress 
+                variant="determinate" 
+                value={storagePercentage} 
+                sx={{ mt: 1 }}
+                color={storagePercentage > 80 ? 'error' : 'primary'}
+              />
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={3}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography variant="h6" gutterBottom>
+                    Total Files
+                  </Typography>
+                  <Typography variant="h4" color="primary">
+                    {files.length}
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    On WebDAV server
+                  </Typography>
+                </Box>
+                <CloudQueue sx={{ fontSize: 40, color: 'primary.main', opacity: 0.3 }} />
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={3}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography variant="h6" gutterBottom>
+                    Team Members
+                  </Typography>
+                  <Typography variant="h4" color="primary">
+                    {teamMembers.length}
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    Active collaborators
+                  </Typography>
+                </Box>
+                <Group sx={{ fontSize: 40, color: 'primary.main', opacity: 0.3 }} />
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={3}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography variant="h6" gutterBottom>
+                    Activities
+                  </Typography>
+                  <Typography variant="h4" color="primary">
+                    {recentActivities.length}
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    Recent actions
+                  </Typography>
+                </Box>
+                <TrendingUp sx={{ fontSize: 40, color: 'primary.main', opacity: 0.3 }} />
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Quick Access */}
+        <Grid item xs={12}>
+          <Paper sx={{ p: 3 }}>
+            <Typography variant="h6" gutterBottom>
+              Quick Actions
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6} md={3}>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<Storage />}
+                  onClick={() => setCurrentPage('storage')}
+                  sx={{ py: 2 }}
+                >
+                  Manage Storage
+                </Button>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<CloudQueue />}
+                  sx={{ py: 2 }}
+                >
+                  WebDAV Settings
+                </Button>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<Group />}
+                  sx={{ py: 2 }}
+                >
+                  Team Management
+                </Button>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<BarChart />}
+                  sx={{ py: 2 }}
+                >
+                  View Analytics
+                </Button>
+              </Grid>
+            </Grid>
+          </Paper>
+        </Grid>
+
+        {/* Recent Files */}
+        <Grid item xs={12} md={8}>
+          <Paper sx={{ p: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6">
+                Recent Files ({files.length})
+              </Typography>
+              <Button
+                variant="text"
+                onClick={() => setCurrentPage('storage')}
+                endIcon={<Storage />}
+              >
+                View All Files
+              </Button>
+            </Box>
+            
+            {files.length === 0 ? (
+              <Box sx={{ textAlign: 'center', py: 4 }}>
+                <CloudQueue sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
+                <Typography variant="h6" color="textSecondary" gutterBottom>
+                  No files uploaded yet
+                </Typography>
+                <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                  Start uploading files to your WebDAV storage
+                </Typography>
+                <Button
+                  variant="contained"
+                  onClick={() => setCurrentPage('storage')}
+                  startIcon={<Storage />}
+                >
+                  Go to Storage
+                </Button>
+              </Box>
+            ) : (
+              <List>
+                {files.slice(0, 5).map((file, index) => (
+                  <React.Fragment key={file.id}>
+                    <ListItem>
+                      <ListItemIcon>
+                        <CloudQueue color="primary" />
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary={file.original_name}
+                        secondary={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                            <Typography variant="caption" color="textSecondary">
+                              {formatFileSize(file.size)}
+                            </Typography>
+                            <Typography variant="caption" color="textSecondary">
+                              {formatDate(file.created_at)}
+                            </Typography>
+                            <Chip label="WebDAV" size="small" color="primary" variant="outlined" />
+                          </Box>
+                        }
+                      />
+                    </ListItem>
+                    {index < Math.min(files.length, 5) - 1 && <Divider />}
+                  </React.Fragment>
+                ))}
+              </List>
+            )}
+          </Paper>
+        </Grid>
+
+        {/* Recent Activity & Team */}
+        <Grid item xs={12} md={4}>
+          <Stack spacing={3}>
+            {/* Recent Activity */}
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Schedule />
+                Recent Activity
+              </Typography>
+              {recentActivities.length === 0 ? (
+                <Typography color="textSecondary" variant="body2">
+                  No recent activity
+                </Typography>
+              ) : (
+                <List dense>
+                  {recentActivities.slice(0, 5).map((activity) => (
+                    <ListItem key={activity.id} sx={{ px: 0 }}>
+                      <ListItemText
+                        primary={
+                          <Typography variant="body2">
+                            {activity.action}
+                          </Typography>
+                        }
+                        secondary={
+                          <Typography variant="caption" color="textSecondary">
+                            {formatDate(activity.created_at)}
+                          </Typography>
+                        }
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              )}
+            </Paper>
+
+            {/* Team Members */}
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Group />
+                Team Members
+              </Typography>
+              {teamMembers.length === 0 ? (
+                <Typography color="textSecondary" variant="body2">
+                  No team members yet
+                </Typography>
+              ) : (
+                <List dense>
+                  {teamMembers.slice(0, 4).map((member) => (
+                    <ListItem key={member.id} sx={{ px: 0 }}>
+                      <ListItemIcon>
+                        <Avatar sx={{ width: 32, height: 32 }}>
+                          {member.username?.[0]?.toUpperCase() || member.name?.[0]?.toUpperCase()}
+                        </Avatar>
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={
+                          <Typography variant="body2">
+                            {member.username || member.name}
+                          </Typography>
+                        }
+                        secondary={
+                          <Chip label={member.role} size="small" variant="outlined" />
+                        }
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              )}
+            </Paper>
+          </Stack>
+        </Grid>
+      </Grid>
+    </Container>
   );
 
   return (
@@ -465,21 +646,23 @@ const Dashboard = () => {
             <MenuIcon />
           </IconButton>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            ZYBoard Dashboard
+            ZYBoard - {currentPage === 'storage' ? 'Storage Management' : 'Dashboard'}
           </Typography>
           
-          <TextField
-            size="small"
-            placeholder="Search files..."
-            sx={{ 
-              mr: 2,
-              backgroundColor: 'rgba(255, 255, 255, 0.15)',
-              borderRadius: 1,
-              '& .MuiInputBase-input': { color: 'white' }
-            }}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+          {currentPage === 'dashboard' && (
+            <TextField
+              size="small"
+              placeholder="Search..."
+              sx={{ 
+                mr: 2,
+                backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                borderRadius: 1,
+                '& .MuiInputBase-input': { color: 'white' }
+              }}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          )}
 
           <IconButton color="inherit" onClick={handleRefresh} disabled={refreshing}>
             <Refresh />
@@ -509,240 +692,12 @@ const Dashboard = () => {
         {drawerContent}
       </Drawer>
 
-      <Container maxWidth="lg" sx={{ mt: 10, mb: 4 }}>
-        <Grid container spacing={3}>
-          {/* User Welcome Card */}
-          <Grid item xs={12}>
-            <Paper sx={{ p: 3, mb: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Avatar sx={{ width: 56, height: 56 }}>
-                  {user?.username?.[0]?.toUpperCase()}
-                </Avatar>
-                <Box>
-                  <Typography variant="h5" gutterBottom>
-                    Welcome, {user?.username || 'User'}
-                  </Typography>
-                  <Typography color="textSecondary">
-                    Email: {user?.email}
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    Member since: {user?.created_at ? formatDate(user.created_at) : 'N/A'}
-                  </Typography>
-                </Box>
-              </Box>
-            </Paper>
-          </Grid>
-
-          {/* Quick Stats */}
-          <Grid item xs={12} md={4}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Storage Usage
-                </Typography>
-                <LinearProgress 
-                  variant="determinate" 
-                  value={storagePercentage} 
-                  sx={{ mb: 1 }}
-                  color={storagePercentage > 80 ? 'error' : 'primary'}
-                />
-                <Typography variant="body2" color="textSecondary">
-                  {formatFileSize(storageInfo.usedSpace)} of {formatFileSize(storageInfo.totalSpace)} used
-                </Typography>
-                <Typography variant="body2" color="textSecondary">
-                  {formatFileSize(storageInfo.availableSpace)} available
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} md={4}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Team Members
-                </Typography>
-                <Typography variant="h4">
-                  {teamMembers.length}
-                </Typography>
-                <Typography variant="body2" color="textSecondary">
-                  Active collaborators
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} md={4}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Total Files
-                </Typography>
-                <Typography variant="h4">
-                  {files.length}
-                </Typography>
-                <Typography variant="body2" color="textSecondary">
-                  Files uploaded
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Files Section */}
-          <Grid item xs={12}>
-            <Paper sx={{ p: 2 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                <Typography variant="h6">
-                  Files ({filteredFiles.length})
-                </Typography>
-                <Button
-                  variant="contained"
-                  startIcon={<CloudUpload />}
-                  onClick={() => setUploadDialog(true)}
-                >
-                  Upload File
-                </Button>
-              </Box>
-              
-              {filteredFiles.length === 0 ? (
-                <Box sx={{ textAlign: 'center', py: 4 }}>
-                  <Typography color="textSecondary">
-                    {searchQuery ? 'No files match your search' : 'No files uploaded yet'}
-                  </Typography>
-                </Box>
-              ) : (
-                <List>
-                  {filteredFiles.map((file) => (
-                    <React.Fragment key={file.id}>
-                      <ListItem
-                        secondaryAction={
-                          <Stack direction="row" spacing={1}>
-                            <IconButton 
-                              size="small"
-                              onClick={() => handleDownloadFile(file.filename, file.original_name)}
-                            >
-                              <Download />
-                            </IconButton>
-                            <IconButton size="small">
-                              <Share />
-                            </IconButton>
-                            <IconButton 
-                              size="small"
-                              onClick={() => handleDeleteFile(file.id, file.original_name)}
-                            >
-                              <Delete />
-                            </IconButton>
-                          </Stack>
-                        }
-                      >
-                        <ListItemIcon>
-                          <InsertDriveFile />
-                        </ListItemIcon>
-                        <ListItemText 
-                          primary={file.original_name}
-                          secondary={`${formatFileSize(file.size)} • ${file.type} • ${formatDate(file.created_at)}`}
-                        />
-                      </ListItem>
-                      <Divider />
-                    </React.Fragment>
-                  ))}
-                </List>
-              )}
-            </Paper>
-          </Grid>
-
-          {/* Recent Activity */}
-          <Grid item xs={12} md={6}>
-            <Paper sx={{ p: 2 }}>
-              <Typography variant="h6" gutterBottom>
-                Recent Activity
-              </Typography>
-              {recentActivities.length === 0 ? (
-                <Typography color="textSecondary">No recent activity</Typography>
-              ) : (
-                <List>
-                  {recentActivities.slice(0, 5).map((activity) => (
-                    <ListItem key={activity.id}>
-                      <ListItemText
-                        primary={activity.action}
-                        secondary={formatDate(activity.created_at)}
-                      />
-                    </ListItem>
-                  ))}
-                </List>
-              )}
-            </Paper>
-          </Grid>
-
-          {/* Team Members */}
-          <Grid item xs={12} md={6}>
-            <Paper sx={{ p: 2 }}>
-              <Typography variant="h6" gutterBottom>
-                Team Members
-              </Typography>
-              {teamMembers.length === 0 ? (
-                <Typography color="textSecondary">No team members</Typography>
-              ) : (
-                <List>
-                  {teamMembers.slice(0, 5).map((member) => (
-                    <ListItem key={member.id}>
-                      <ListItemIcon>
-                        <Avatar sx={{ width: 32, height: 32 }}>
-                          {member.username?.[0]?.toUpperCase() || member.name?.[0]?.toUpperCase()}
-                        </Avatar>
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={member.username || member.name}
-                        secondary={member.role}
-                      />
-                    </ListItem>
-                  ))}
-                </List>
-              )}
-            </Paper>
-          </Grid>
-        </Grid>
-      </Container>
-
-      {/* Upload Dialog */}
-      <Dialog open={uploadDialog} onClose={() => !uploading && setUploadDialog(false)}>
-        <DialogTitle>Upload File</DialogTitle>
-        <DialogContent>
-          <Box sx={{ p: 2, minWidth: 400 }}>
-            <input
-              type="file"
-              onChange={handleFileSelect}
-              style={{ marginBottom: 16, width: '100%' }}
-              disabled={uploading}
-            />
-            {selectedFile && (
-              <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                Selected: {selectedFile.name} ({formatFileSize(selectedFile.size)})
-              </Typography>
-            )}
-            {uploading && (
-              <Box sx={{ mb: 2 }}>
-                <LinearProgress variant="determinate" value={uploadProgress} />
-                <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
-                  Uploading... {Math.round(uploadProgress)}%
-                </Typography>
-              </Box>
-            )}
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setUploadDialog(false)} disabled={uploading}>
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleUpload} 
-            disabled={!selectedFile || uploading}
-            variant="contained"
-          >
-            {uploading ? 'Uploading...' : 'Upload'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {/* Main Content */}
+      {currentPage === 'storage' ? (
+        <StoragePage user={user} onBack={() => setCurrentPage('dashboard')} />
+      ) : (
+        <DashboardContent />
+      )}
 
       {/* User Menu */}
       <Menu
