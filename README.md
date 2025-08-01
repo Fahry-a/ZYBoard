@@ -19,7 +19,7 @@ note: this priject was create by ai github copilot 60%, this project for testing
 
 | Komponen    | Teknologi                   |
 |-------------|-----------------------------|
-| Frontend    | React       |
+| Frontend    | React                       |
 | Backend     | Node.js + Express.js        |
 | Database    | MySQL                       |
 | Storage     | WebDAV                      |
