@@ -34,8 +34,8 @@ clone repository
 ```bash
 git clone https://github.com/fahry-a/zyboard.git
 ```
-```bash
 cd to repo folder and install dependency
+```bash
 cd ZYBoard && npm install && npm run install:server
 ```
 setup environment
