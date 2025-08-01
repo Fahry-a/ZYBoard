@@ -51,6 +51,8 @@ import {
 import { useTheme } from '@mui/material/styles';
 import { ColorModeContext } from '../App';
 import StoragePage from './StoragePage';
+import TeamsPage from './TeamsPage';
+import NotificationsPage from './NotificationsPage';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -301,11 +303,25 @@ const Dashboard = () => {
           </ListItemIcon>
           <ListItemText primary="Storage" />
         </ListItemButton>
-        <ListItemButton>
+        <ListItemButton 
+          selected={currentPage === 'teams'}
+          onClick={() => handleNavigation('teams')}
+        >
           <ListItemIcon>
             <Group />
           </ListItemIcon>
-          <ListItemText primary="Team" />
+          <ListItemText primary="Teams" />
+        </ListItemButton>
+        <ListItemButton 
+          selected={currentPage === 'notifications'}
+          onClick={() => handleNavigation('notifications')}
+        >
+          <ListItemIcon>
+            <Badge badgeContent={notifications.filter(n => !n.read).length} color="error">
+              <Notifications />
+            </Badge>
+          </ListItemIcon>
+          <ListItemText primary="Notifications" />
         </ListItemButton>
         <ListItemButton>
           <ListItemIcon>
@@ -464,20 +480,22 @@ const Dashboard = () => {
                 <Button
                   fullWidth
                   variant="outlined"
-                  startIcon={<CloudQueue />}
+                  startIcon={<Group />}
+                  onClick={() => setCurrentPage('teams')}
                   sx={{ py: 2 }}
                 >
-                  WebDAV Settings
+                  Team Management
                 </Button>
               </Grid>
               <Grid item xs={12} sm={6} md={3}>
                 <Button
                   fullWidth
                   variant="outlined"
-                  startIcon={<Group />}
+                  startIcon={<Notifications />}
+                  onClick={() => setCurrentPage('notifications')}
                   sx={{ py: 2 }}
                 >
-                  Team Management
+                  View Notifications
                 </Button>
               </Grid>
               <Grid item xs={12} sm={6} md={3}>
@@ -646,7 +664,12 @@ const Dashboard = () => {
             <MenuIcon />
           </IconButton>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            ZYBoard - {currentPage === 'storage' ? 'Storage Management' : 'Dashboard'}
+            ZYBoard - {
+              currentPage === 'storage' ? 'Storage Management' : 
+              currentPage === 'teams' ? 'Team Management' :
+              currentPage === 'notifications' ? 'Notifications' :
+              'Dashboard'
+            }
           </Typography>
           
           {currentPage === 'dashboard' && (
@@ -695,6 +718,10 @@ const Dashboard = () => {
       {/* Main Content */}
       {currentPage === 'storage' ? (
         <StoragePage user={user} onBack={() => setCurrentPage('dashboard')} />
+      ) : currentPage === 'teams' ? (
+        <TeamsPage user={user} onBack={() => setCurrentPage('dashboard')} />
+      ) : currentPage === 'notifications' ? (
+        <NotificationsPage user={user} onBack={() => setCurrentPage('dashboard')} />
       ) : (
         <DashboardContent />
       )}
