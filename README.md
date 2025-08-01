@@ -33,7 +33,7 @@ note: this priject was create by ai github copilot 60%, this project for testing
 ```bash
 # Clone repository
 git clone https://github.com/fahry-a/zyboard.git
-
+```
 # Masuk ke folder proyek
 cd zyboard
 
