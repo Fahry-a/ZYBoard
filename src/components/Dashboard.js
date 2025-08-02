@@ -1,3 +1,4 @@
+// src/components/Dashboard.js - Complete updated version
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -274,6 +275,9 @@ const Dashboard = () => {
     ? (storageInfo.usedSpace / storageInfo.totalSpace) * 100 
     : 0;
 
+  // Get unread notifications count
+  const unreadNotificationsCount = notifications.filter(n => !n.read).length;
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -317,7 +321,7 @@ const Dashboard = () => {
           onClick={() => handleNavigation('notifications')}
         >
           <ListItemIcon>
-            <Badge badgeContent={notifications.filter(n => !n.read).length} color="error">
+            <Badge badgeContent={unreadNotificationsCount} color="error">
               <Notifications />
             </Badge>
           </ListItemIcon>
@@ -361,6 +365,16 @@ const Dashboard = () => {
                     color="success" 
                     size="small" 
                   />
+                  {unreadNotificationsCount > 0 && (
+                    <Chip 
+                      icon={<Notifications />} 
+                      label={`${unreadNotificationsCount} unread`} 
+                      color="error" 
+                      size="small"
+                      onClick={() => setCurrentPage('notifications')}
+                      clickable
+                    />
+                  )}
                 </Box>
               </Box>
             </Box>
@@ -369,7 +383,7 @@ const Dashboard = () => {
 
         {/* Quick Stats */}
         <Grid item xs={12} md={3}>
-          <Card>
+          <Card sx={{ cursor: 'pointer' }} onClick={() => setCurrentPage('storage')}>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box>
@@ -396,7 +410,7 @@ const Dashboard = () => {
         </Grid>
 
         <Grid item xs={12} md={3}>
-          <Card>
+          <Card sx={{ cursor: 'pointer' }} onClick={() => setCurrentPage('storage')}>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box>
@@ -417,7 +431,7 @@ const Dashboard = () => {
         </Grid>
 
         <Grid item xs={12} md={3}>
-          <Card>
+          <Card sx={{ cursor: 'pointer' }} onClick={() => setCurrentPage('teams')}>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box>
@@ -438,21 +452,23 @@ const Dashboard = () => {
         </Grid>
 
         <Grid item xs={12} md={3}>
-          <Card>
+          <Card sx={{ cursor: 'pointer' }} onClick={() => setCurrentPage('notifications')}>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box>
                   <Typography variant="h6" gutterBottom>
-                    Activities
+                    Notifications
                   </Typography>
                   <Typography variant="h4" color="primary">
-                    {recentActivities.length}
+                    {unreadNotificationsCount}
                   </Typography>
                   <Typography variant="body2" color="textSecondary">
-                    Recent actions
+                    Unread messages
                   </Typography>
                 </Box>
-                <TrendingUp sx={{ fontSize: 40, color: 'primary.main', opacity: 0.3 }} />
+                <Badge badgeContent={unreadNotificationsCount} color="error">
+                  <Notifications sx={{ fontSize: 40, color: 'primary.main', opacity: 0.3 }} />
+                </Badge>
               </Box>
             </CardContent>
           </Card>
@@ -496,6 +512,14 @@ const Dashboard = () => {
                   sx={{ py: 2 }}
                 >
                   View Notifications
+                  {unreadNotificationsCount > 0 && (
+                    <Chip 
+                      label={unreadNotificationsCount} 
+                      size="small" 
+                      color="error" 
+                      sx={{ ml: 1 }}
+                    />
+                  )}
                 </Button>
               </Grid>
               <Grid item xs={12} sm={6} md={3}>
@@ -576,9 +600,59 @@ const Dashboard = () => {
           </Paper>
         </Grid>
 
-        {/* Recent Activity & Team */}
+        {/* Recent Activity & Notifications */}
         <Grid item xs={12} md={4}>
           <Stack spacing={3}>
+            {/* Recent Notifications */}
+            <Paper sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Badge badgeContent={unreadNotificationsCount} color="error">
+                    <Notifications />
+                  </Badge>
+                  Recent Notifications
+                </Typography>
+                <Button
+                  size="small"
+                  onClick={() => setCurrentPage('notifications')}
+                >
+                  View All
+                </Button>
+              </Box>
+              {notifications.length === 0 ? (
+                <Typography color="textSecondary" variant="body2">
+                  No notifications yet
+                </Typography>
+              ) : (
+                <List dense>
+                  {notifications.slice(0, 3).map((notification) => (
+                    <ListItem key={notification.id} sx={{ px: 0 }}>
+                      <ListItemText
+                        primary={
+                          <Typography variant="body2" sx={{ 
+                            fontWeight: notification.read ? 'normal' : 'bold',
+                            color: notification.read ? 'text.secondary' : 'text.primary'
+                          }}>
+                            {notification.message}
+                          </Typography>
+                        }
+                        secondary={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="caption" color="textSecondary">
+                              {formatDate(notification.created_at)}
+                            </Typography>
+                            {!notification.read && (
+                              <Chip label="New" size="small" color="primary" />
+                            )}
+                          </Box>
+                        }
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              )}
+            </Paper>
+
             {/* Recent Activity */}
             <Paper sx={{ p: 3 }}>
               <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -591,7 +665,7 @@ const Dashboard = () => {
                 </Typography>
               ) : (
                 <List dense>
-                  {recentActivities.slice(0, 5).map((activity) => (
+                  {recentActivities.slice(0, 4).map((activity) => (
                     <ListItem key={activity.id} sx={{ px: 0 }}>
                       <ListItemText
                         primary={
@@ -613,17 +687,25 @@ const Dashboard = () => {
 
             {/* Team Members */}
             <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Group />
-                Team Members
-              </Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Group />
+                  Team Members
+                </Typography>
+                <Button
+                  size="small"
+                  onClick={() => setCurrentPage('teams')}
+                >
+                  Manage
+                </Button>
+              </Box>
               {teamMembers.length === 0 ? (
                 <Typography color="textSecondary" variant="body2">
                   No team members yet
                 </Typography>
               ) : (
                 <List dense>
-                  {teamMembers.slice(0, 4).map((member) => (
+                  {teamMembers.slice(0, 3).map((member) => (
                     <ListItem key={member.id} sx={{ px: 0 }}>
                       <ListItemIcon>
                         <Avatar sx={{ width: 32, height: 32 }}>
@@ -691,8 +773,11 @@ const Dashboard = () => {
             <Refresh />
           </IconButton>
 
-          <IconButton color="inherit">
-            <Badge badgeContent={notifications.filter(n => !n.read).length} color="error">
+          <IconButton 
+            color="inherit"
+            onClick={() => setCurrentPage('notifications')}
+          >
+            <Badge badgeContent={unreadNotificationsCount} color="error">
               <Notifications />
             </Badge>
           </IconButton>

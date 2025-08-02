@@ -5,6 +5,9 @@ const path = require('path');
 
 class WebDAVService {
   constructor() {
+    console.log("🧪 WEBDAV_URL =", process.env.WEBDAV_URL);
+    console.log("🧪 WEBDAV_USERNAME =", process.env.WEBDAV_USERNAME);
+    console.log("🧪 WEBDAV_PASSWORD =", process.env.WEBDAV_PASSWORD);
     this.client = createClient(
       process.env.WEBDAV_URL,
       {
