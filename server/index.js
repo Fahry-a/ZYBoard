@@ -559,7 +559,7 @@ app.get('/api/notifications', verifyToken, async (req, res) => {
 
         // Get unread count
         const unreadCount = await db.query(
-            'SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND read = false',
+            'SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND `read` = false',
             [req.user.id]
         );
 
