@@ -6,9 +6,10 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "setup": "node scripts/setup.js",
     "setup:mysql": "node scripts/setup-mysql.js",
-    "setup:supabase": "node scripts/setup-supabase.js"
+    "setup:supabase": "node scripts/setup-supabase.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": ["cloud-storage", "webdav", "file-manager", "supabase", "mysql"],
   "author": "",

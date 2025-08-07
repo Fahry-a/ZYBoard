@@ -31,7 +31,11 @@ class SupabaseAdapter {
   async testConnection() {
     try {
       const { data, error } = await this.client.from('users').select('count').limit(1);
-      return !error;
+      if (error && error.code !== 'PGRST116') {
+        console.error('Supabase test connection error:', error);
+        return false;
+      }
+      return true;
     } catch (error) {
       console.error('Supabase connection test failed:', error);
       return false;
@@ -60,7 +64,10 @@ class SupabaseAdapter {
       .select()
       .single();
       
-    if (error) throw error;
+    if (error) {
+      console.error('Insert user error:', error);
+      throw new Error(`Failed to create user: ${error.message}`);
+    }
     return { insertId: data.id };
   }
 
@@ -70,8 +77,11 @@ class SupabaseAdapter {
       .select('*')
       .eq('email', email);
       
-    if (error) throw error;
-    return data;
+    if (error) {
+      console.error('Find user by email error:', error);
+      throw new Error(`Failed to find user: ${error.message}`);
+    }
+    return data || [];
   }
 
   async findUserById(id) {
@@ -80,8 +90,11 @@ class SupabaseAdapter {
       .select('id, username, email, created_at')
       .eq('id', id);
       
-    if (error) throw error;
-    return data;
+    if (error) {
+      console.error('Find user by ID error:', error);
+      throw new Error(`Failed to find user: ${error.message}`);
+    }
+    return data || [];
   }
 
   // File operations
@@ -101,7 +114,10 @@ class SupabaseAdapter {
       .select()
       .single();
       
-    if (error) throw error;
+    if (error) {
+      console.error('Insert file error:', error);
+      throw new Error(`Failed to insert file: ${error.message}`);
+    }
     return { insertId: data.id };
   }
 
@@ -112,8 +128,11 @@ class SupabaseAdapter {
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
       
-    if (error) throw error;
-    return data;
+    if (error) {
+      console.error('Find files by user ID error:', error);
+      throw new Error(`Failed to find files: ${error.message}`);
+    }
+    return data || [];
   }
 
   async findFileById(id, userId) {
@@ -123,8 +142,11 @@ class SupabaseAdapter {
       .eq('id', id)
       .eq('user_id', userId);
       
-    if (error) throw error;
-    return data;
+    if (error) {
+      console.error('Find file by ID error:', error);
+      throw new Error(`Failed to find file: ${error.message}`);
+    }
+    return data || [];
   }
 
   async findFileByFilename(filename, userId) {
@@ -134,8 +156,11 @@ class SupabaseAdapter {
       .eq('filename', filename)
       .eq('user_id', userId);
       
-    if (error) throw error;
-    return data;
+    if (error) {
+      console.error('Find file by filename error:', error);
+      throw new Error(`Failed to find file: ${error.message}`);
+    }
+    return data || [];
   }
 
   async deleteFile(id) {
@@ -145,7 +170,10 @@ class SupabaseAdapter {
       .eq('id', id)
       .select();
       
-    if (error) throw error;
+    if (error) {
+      console.error('Delete file error:', error);
+      throw new Error(`Failed to delete file: ${error.message}`);
+    }
     return { affectedRows: data?.length || 0 };
   }
 
@@ -156,8 +184,11 @@ class SupabaseAdapter {
       .select('*')
       .eq('user_id', userId);
       
-    if (error) throw error;
-    return data;
+    if (error) {
+      console.error('Find storage by user ID error:', error);
+      throw new Error(`Failed to find storage: ${error.message}`);
+    }
+    return data || [];
   }
 
   async insertStorage(userId, totalSpace, usedSpace) {
@@ -173,7 +204,10 @@ class SupabaseAdapter {
       .select()
       .single();
       
-    if (error) throw error;
+    if (error) {
+      console.error('Insert storage error:', error);
+      throw new Error(`Failed to insert storage: ${error.message}`);
+    }
     return { insertId: data.id };
   }
 
@@ -187,7 +221,10 @@ class SupabaseAdapter {
       .eq('user_id', userId)
       .select();
       
-    if (error) throw error;
+    if (error) {
+      console.error('Update storage error:', error);
+      throw new Error(`Failed to update storage: ${error.message}`);
+    }
     return { affectedRows: data?.length || 0 };
   }
 
@@ -213,7 +250,10 @@ class SupabaseAdapter {
       .select()
       .single();
       
-    if (error) throw error;
+    if (error) {
+      console.error('Insert activity error:', error);
+      throw new Error(`Failed to insert activity: ${error.message}`);
+    }
     return { insertId: data.id };
   }
 
@@ -225,8 +265,11 @@ class SupabaseAdapter {
       .order('created_at', { ascending: false })
       .limit(limit);
       
-    if (error) throw error;
-    return data;
+    if (error) {
+      console.error('Find activities error:', error);
+      throw new Error(`Failed to find activities: ${error.message}`);
+    }
+    return data || [];
   }
 
   // Notification operations
@@ -244,7 +287,10 @@ class SupabaseAdapter {
       .select()
       .single();
       
-    if (error) throw error;
+    if (error) {
+      console.error('Insert notification error:', error);
+      throw new Error(`Failed to insert notification: ${error.message}`);
+    }
     return { insertId: data.id };
   }
 
@@ -263,8 +309,12 @@ class SupabaseAdapter {
       .range(offset, offset + limit - 1);
     
     const { data, error } = await query;
-    if (error) throw error;
-    return data;
+    
+    if (error) {
+      console.error('Find notifications error:', error);
+      throw new Error(`Failed to find notifications: ${error.message}`);
+    }
+    return data || [];
   }
 
   async markNotificationAsRead(id, userId) {
@@ -275,7 +325,10 @@ class SupabaseAdapter {
       .eq('user_id', userId)
       .select();
       
-    if (error) throw error;
+    if (error) {
+      console.error('Mark notification as read error:', error);
+      throw new Error(`Failed to mark notification as read: ${error.message}`);
+    }
     return { affectedRows: data?.length || 0 };
   }
 
@@ -287,7 +340,10 @@ class SupabaseAdapter {
       .eq('read', false)
       .select();
       
-    if (error) throw error;
+    if (error) {
+      console.error('Mark all notifications as read error:', error);
+      throw new Error(`Failed to mark all notifications as read: ${error.message}`);
+    }
     return { affectedRows: data?.length || 0 };
   }
 
@@ -299,7 +355,10 @@ class SupabaseAdapter {
       .eq('user_id', userId)
       .select();
       
-    if (error) throw error;
+    if (error) {
+      console.error('Delete notification error:', error);
+      throw new Error(`Failed to delete notification: ${error.message}`);
+    }
     return { affectedRows: data?.length || 0 };
   }
 
@@ -310,7 +369,10 @@ class SupabaseAdapter {
       .eq('user_id', userId)
       .select();
       
-    if (error) throw error;
+    if (error) {
+      console.error('Delete all notifications error:', error);
+      throw new Error(`Failed to delete all notifications: ${error.message}`);
+    }
     return { affectedRows: data?.length || 0 };
   }
 
@@ -321,7 +383,10 @@ class SupabaseAdapter {
       .eq('user_id', userId)
       .eq('read', false);
       
-    if (error) throw error;
+    if (error) {
+      console.error('Count unread notifications error:', error);
+      throw new Error(`Failed to count unread notifications: ${error.message}`);
+    }
     return count || 0;
   }
 
@@ -339,43 +404,64 @@ class SupabaseAdapter {
       .select()
       .single();
       
-    if (error) throw error;
+    if (error) {
+      console.error('Insert team error:', error);
+      throw new Error(`Failed to insert team: ${error.message}`);
+    }
     return { insertId: data.id };
   }
 
   async findTeamsByUserId(userId) {
-    // This is a complex query that might need to be split into multiple calls
-    // First, get team IDs for the user
-    const { data: teamMemberships, error: memberError } = await this.client
-      .from('team_members')
-      .select('team_id')
-      .eq('user_id', userId);
+    try {
+      // First, get team IDs for the user
+      const { data: teamMemberships, error: memberError } = await this.client
+        .from('team_members')
+        .select('team_id')
+        .eq('user_id', userId);
+        
+      if (memberError) {
+        console.error('Find team memberships error:', memberError);
+        throw new Error(`Failed to find team memberships: ${memberError.message}`);
+      }
       
-    if (memberError) throw memberError;
-    
-    if (teamMemberships.length === 0) return [];
-    
-    const teamIds = teamMemberships.map(tm => tm.team_id);
-    
-    // Get team details with member counts
-    const { data: teams, error: teamsError } = await this.client
-      .from('teams')
-      .select(`
-        *,
-        users!teams_created_by_fkey(username),
-        team_members(count)
-      `)
-      .in('id', teamIds)
-      .order('created_at', { ascending: false });
+      if (!teamMemberships || teamMemberships.length === 0) return [];
       
-    if (teamsError) throw teamsError;
-    
-    // Transform the data to match MySQL format
-    return teams.map(team => ({
-      ...team,
-      creator_name: team.users?.username,
-      member_count: team.team_members?.[0]?.count || 0
-    }));
+      const teamIds = teamMemberships.map(tm => tm.team_id);
+      
+      // Get team details
+      const { data: teams, error: teamsError } = await this.client
+        .from('teams')
+        .select(`
+          *,
+          users!teams_created_by_fkey(username)
+        `)
+        .in('id', teamIds)
+        .order('created_at', { ascending: false });
+        
+      if (teamsError) {
+        console.error('Find teams error:', teamsError);
+        throw new Error(`Failed to find teams: ${teamsError.message}`);
+      }
+      
+      // Get member counts for each team
+      const teamsWithCounts = await Promise.all(teams.map(async (team) => {
+        const { count, error: countError } = await this.client
+          .from('team_members')
+          .select('*', { count: 'exact', head: true })
+          .eq('team_id', team.id);
+          
+        return {
+          ...team,
+          creator_name: team.users?.username || 'Unknown',
+          member_count: count || 0
+        };
+      }));
+      
+      return teamsWithCounts;
+    } catch (error) {
+      console.error('Find teams by user ID error:', error);
+      throw new Error(`Failed to find teams: ${error.message}`);
+    }
   }
 
   async insertTeamMember(teamId, userId, role = 'member') {
@@ -391,34 +477,52 @@ class SupabaseAdapter {
       .select()
       .single();
       
-    if (error) throw error;
+    if (error) {
+      console.error('Insert team member error:', error);
+      throw new Error(`Failed to insert team member: ${error.message}`);
+    }
     return { insertId: data.id };
   }
 
   async findTeamMembersByUserId(userId) {
-    const { data, error } = await this.client
-      .from('team_members')
-      .select(`
-        *,
-        users!team_members_user_id_fkey(id, username, email, created_at),
-        teams!team_members_team_id_fkey(id, name)
-      `)
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+    try {
+      // Get user's team memberships with related team and user data
+      const { data: teamMemberships, error } = await this.client
+        .from('team_members')
+        .select(`
+          *,
+          users!team_members_user_id_fkey(id, username, email, created_at),
+          teams!team_members_team_id_fkey(id, name)
+        `);
+        
+      if (error) {
+        console.error('Find team members error:', error);
+        throw new Error(`Failed to find team members: ${error.message}`);
+      }
       
-    if (error) throw error;
-    
-    // Transform data to match MySQL format
-    return data.map(tm => ({
-      id: tm.users.id,
-      username: tm.users.username,
-      email: tm.users.email,
-      created_at: tm.users.created_at,
-      role: tm.role,
-      joined_at: tm.created_at,
-      team_id: tm.teams.id,
-      team_name: tm.teams.name
-    }));
+      // Filter for teams that the user is a member of
+      const userTeamIds = teamMemberships
+        .filter(tm => tm.user_id === userId)
+        .map(tm => tm.team_id);
+      
+      const teamMembers = teamMemberships
+        .filter(tm => userTeamIds.includes(tm.team_id))
+        .map(tm => ({
+          id: tm.users.id,
+          username: tm.users.username,
+          email: tm.users.email,
+          created_at: tm.users.created_at,
+          role: tm.role,
+          joined_at: tm.created_at,
+          team_id: tm.teams.id,
+          team_name: tm.teams.name
+        }));
+        
+      return teamMembers;
+    } catch (error) {
+      console.error('Find team members by user ID error:', error);
+      throw new Error(`Failed to find team members: ${error.message}`);
+    }
   }
 
   async checkTeamAdmin(teamId, userId) {
@@ -429,8 +533,11 @@ class SupabaseAdapter {
       .eq('user_id', userId)
       .eq('role', 'admin');
       
-    if (error) throw error;
-    return data.length > 0;
+    if (error) {
+      console.error('Check team admin error:', error);
+      return false;
+    }
+    return data && data.length > 0;
   }
 
   async checkTeamOwner(teamId, userId) {
@@ -440,19 +547,25 @@ class SupabaseAdapter {
       .eq('id', teamId)
       .eq('created_by', userId);
       
-    if (error) throw error;
-    return data.length > 0;
+    if (error) {
+      console.error('Check team owner error:', error);
+      return false;
+    }
+    return data && data.length > 0;
   }
 
   async deleteTeam(teamId) {
-    // Delete team members first (handled by CASCADE in schema)
+    // Delete team (cascade will handle team_members)
     const { data, error } = await this.client
       .from('teams')
       .delete()
       .eq('id', teamId)
       .select();
       
-    if (error) throw error;
+    if (error) {
+      console.error('Delete team error:', error);
+      throw new Error(`Failed to delete team: ${error.message}`);
+    }
     return { affectedRows: data?.length || 0 };
   }
 
@@ -464,115 +577,151 @@ class SupabaseAdapter {
       .eq('user_id', memberId)
       .select();
       
-    if (error) throw error;
+    if (error) {
+      console.error('Remove team member error:', error);
+      throw new Error(`Failed to remove team member: ${error.message}`);
+    }
     return { affectedRows: data?.length || 0 };
   }
 
   // Advanced queries
   async getUserStats(userId) {
-    // This would need multiple queries in Supabase or a custom database function
-    const [user, storage, files] = await Promise.all([
-      this.findUserById(userId),
-      this.findStorageByUserId(userId),
-      this.findFilesByUserId(userId)
-    ]);
-    
-    if (user.length === 0) return null;
-    
-    const userStats = user[0];
-    const storageStats = storage[0] || { total_space: 1073741824, used_space: 0 };
-    
-    const fileCount = files.length;
-    const avgFileSize = files.length > 0 ? files.reduce((sum, f) => sum + f.size, 0) / files.length : 0;
-    const lastUpload = files.length > 0 ? Math.max(...files.map(f => new Date(f.created_at))) : null;
-    
-    return {
-      ...userStats,
-      total_space: storageStats.total_space,
-      used_space: storageStats.used_space,
-      available_space: storageStats.total_space - storageStats.used_space,
-      usage_percentage: Math.round((storageStats.used_space / storageStats.total_space) * 100 * 100) / 100,
-      file_count: fileCount,
-      avg_file_size: avgFileSize,
-      last_upload: lastUpload
-    };
+    try {
+      // Get user data
+      const users = await this.findUserById(userId);
+      if (users.length === 0) return null;
+      
+      // Get storage data
+      const storage = await this.findStorageByUserId(userId);
+      const storageStats = storage[0] || { total_space: 1073741824, used_space: 0 };
+      
+      // Get files data
+      const files = await this.findFilesByUserId(userId);
+      
+      const fileCount = files.length;
+      const avgFileSize = files.length > 0 ? files.reduce((sum, f) => sum + f.size, 0) / files.length : 0;
+      const lastUpload = files.length > 0 ? files.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0].created_at : null;
+      
+      return {
+        ...users[0],
+        total_space: storageStats.total_space,
+        used_space: storageStats.used_space,
+        available_space: storageStats.total_space - storageStats.used_space,
+        usage_percentage: Math.round((storageStats.used_space / storageStats.total_space) * 100 * 100) / 100,
+        file_count: fileCount,
+        avg_file_size: avgFileSize,
+        last_upload: lastUpload
+      };
+    } catch (error) {
+      console.error('Get user stats error:', error);
+      throw new Error(`Failed to get user stats: ${error.message}`);
+    }
   }
 
   async getFileTypeStats(userId) {
-    const files = await this.findFilesByUserId(userId);
-    
-    const stats = {};
-    files.forEach(file => {
-      if (!stats[file.type]) {
-        stats[file.type] = {
-          type: file.type,
-          count: 0,
-          total_size: 0
-        };
-      }
-      stats[file.type].count++;
-      stats[file.type].total_size += file.size;
-    });
-    
-    return Object.values(stats).map(stat => ({
-      ...stat,
-      avg_size: stat.total_size / stat.count
-    })).sort((a, b) => b.count - a.count);
+    try {
+      const files = await this.findFilesByUserId(userId);
+      
+      const stats = {};
+      files.forEach(file => {
+        if (!stats[file.type]) {
+          stats[file.type] = {
+            type: file.type,
+            count: 0,
+            total_size: 0
+          };
+        }
+        stats[file.type].count++;
+        stats[file.type].total_size += file.size;
+      });
+      
+      return Object.values(stats).map(stat => ({
+        ...stat,
+        avg_size: stat.total_size / stat.count
+      })).sort((a, b) => b.count - a.count);
+    } catch (error) {
+      console.error('Get file type stats error:', error);
+      throw new Error(`Failed to get file type stats: ${error.message}`);
+    }
   }
 
   async getRecentActivity(userId, days = 7) {
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-    
-    const { data, error } = await this.client
-      .from('activities')
-      .select('created_at')
-      .eq('user_id', userId)
-      .gte('created_at', startDate.toISOString());
+    try {
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
       
-    if (error) throw error;
-    
-    // Group by date
-    const activityByDate = {};
-    data.forEach(activity => {
-      const date = activity.created_at.split('T')[0];
-      activityByDate[date] = (activityByDate[date] || 0) + 1;
-    });
-    
-    return Object.entries(activityByDate).map(([date, activity_count]) => ({
-      date,
-      activity_count
-    })).sort((a, b) => b.date.localeCompare(a.date));
+      const { data, error } = await this.client
+        .from('activities')
+        .select('created_at')
+        .eq('user_id', userId)
+        .gte('created_at', startDate.toISOString());
+        
+      if (error) {
+        console.error('Get recent activity error:', error);
+        throw new Error(`Failed to get recent activity: ${error.message}`);
+      }
+      
+      // Group by date
+      const activityByDate = {};
+      (data || []).forEach(activity => {
+        const date = activity.created_at.split('T')[0];
+        activityByDate[date] = (activityByDate[date] || 0) + 1;
+      });
+      
+      return Object.entries(activityByDate).map(([date, activity_count]) => ({
+        date,
+        activity_count
+      })).sort((a, b) => b.date.localeCompare(a.date));
+    } catch (error) {
+      console.error('Get recent activity error:', error);
+      throw new Error(`Failed to get recent activity: ${error.message}`);
+    }
   }
 
   // Cleanup and maintenance
   async cleanupOldNotifications(days = 30) {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - days);
-    
-    const { data, error } = await this.client
-      .from('notifications')
-      .delete()
-      .lt('created_at', cutoffDate.toISOString())
-      .eq('read', true)
-      .select();
+    try {
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - days);
       
-    if (error) throw error;
-    return { deletedCount: data?.length || 0 };
+      const { data, error } = await this.client
+        .from('notifications')
+        .delete()
+        .lt('created_at', cutoffDate.toISOString())
+        .eq('read', true)
+        .select();
+        
+      if (error) {
+        console.error('Cleanup old notifications error:', error);
+        throw new Error(`Failed to cleanup old notifications: ${error.message}`);
+      }
+      return { deletedCount: data?.length || 0 };
+    } catch (error) {
+      console.error('Cleanup old notifications error:', error);
+      throw new Error(`Failed to cleanup old notifications: ${error.message}`);
+    }
   }
 
   async cleanupOldActivities(days = 90) {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - days);
-    
-    const { data, error } = await this.client
-      .from('activities')
-      .delete()
-      .lt('created_at', cutoffDate.toISOString())
-      .select();
+    try {
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - days);
       
-    if (error) throw error;
-    return { deletedCount: data?.length || 0 };
+      const { data, error } = await this.client
+        .from('activities')
+        .delete()
+        .lt('created_at', cutoffDate.toISOString())
+        .select();
+        
+      if (error) {
+        console.error('Cleanup old activities error:', error);
+        throw new Error(`Failed to cleanup old activities: ${error.message}`);
+      }
+      return { deletedCount: data?.length || 0 };
+    } catch (error) {
+      console.error('Cleanup old activities error:', error);
+      throw new Error(`Failed to cleanup old activities: ${error.message}`);
+    }
   }
 
   // Transaction support (limited in Supabase)
@@ -588,6 +737,7 @@ class SupabaseAdapter {
       } catch (error) {
         // If any operation fails, we can't rollback previous operations
         // This is a limitation of the Supabase approach
+        console.error('Transaction operation failed:', error);
         throw new Error(`Transaction failed at operation ${results.length + 1}: ${error.message}`);
       }
     }

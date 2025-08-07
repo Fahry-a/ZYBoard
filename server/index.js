@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import db from './config/db.js';
+import DatabaseFactory from './config/database-factory.js';
 import webdavService from './services/webdavService.js';
 
 dotenv.config();
@@ -15,6 +15,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
+// Initialize database adapter
+const db = DatabaseFactory.create(process.env.DB_TYPE || 'supabase');
 
 // Middleware
 app.use(cors());
@@ -107,10 +110,7 @@ const errorHandler = (err, req, res, next) => {
 // Helper functions
 const logActivity = async (userId, action, metadata = {}) => {
     try {
-        await db.query(
-            'INSERT INTO activities (user_id, action, metadata) VALUES (?, ?, ?)',
-            [userId, action, JSON.stringify(metadata)]
-        );
+        await db.insertActivity(userId, action, metadata);
     } catch (error) {
         console.error('Error logging activity:', error);
     }
@@ -118,10 +118,7 @@ const logActivity = async (userId, action, metadata = {}) => {
 
 const createNotification = async (userId, message, type = 'info', category = 'general') => {
     try {
-        await db.query(
-            'INSERT INTO notifications (user_id, message, type, category) VALUES (?, ?, ?, ?)',
-            [userId, message, type, category]
-        );
+        await db.insertNotification(userId, message, type, category);
     } catch (error) {
         console.error('Error creating notification:', error);
     }
@@ -141,31 +138,24 @@ app.post('/api/auth/register', async (req, res) => {
         }
 
         // Check if user exists
-        const existingUsers = await db.query(
-            'SELECT * FROM users WHERE username = ? OR email = ?',
-            [username, email]
-        );
-
-        if (existingUsers.length > 0) {
-            return res.status(400).json({ message: 'Username or email already exists' });
+        const existingUsersByEmail = await db.findUserByEmail(email);
+        if (existingUsersByEmail.length > 0) {
+            return res.status(400).json({ message: 'Email already exists' });
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
         // Insert user
-        const result = await db.query(
-            'INSERT INTO users (username, email, password) VALUES (?, ?, ?)',
-            [username, email, hashedPassword]
-        );
-
+        const result = await db.insertUser(username, email, hashedPassword);
         const userId = result.insertId;
 
-        // Create storage allocation (handled by trigger in Supabase, manually for MySQL)
+        // For MySQL, we need to manually create storage allocation (Supabase handles it via trigger)
         if (db.type === 'mysql') {
-            await db.query(
-                'INSERT INTO storage_allocation (user_id, total_space, used_space) VALUES (?, ?, ?)',
-                [userId, 1024 * 1024 * 1024, 0]
-            );
+            try {
+                await db.insertStorage(userId, 1073741824, 0); // 1GB default
+            } catch (storageError) {
+                console.warn('Storage allocation creation warning:', storageError.message);
+            }
         }
 
         const token = jwt.sign(
@@ -200,10 +190,7 @@ app.post('/api/auth/login', async (req, res) => {
             return res.status(400).json({ message: 'Email and password are required' });
         }
 
-        const users = await db.query(
-            'SELECT * FROM users WHERE email = ?',
-            [email]
-        );
+        const users = await db.findUserByEmail(email);
 
         if (users.length === 0) {
             return res.status(401).json({ message: 'Invalid credentials' });
@@ -246,17 +233,12 @@ app.post('/api/files/upload', verifyToken, upload.single('file'), async (req, re
         }
 
         // Check storage limit
-        let storage = await db.query(
-            'SELECT * FROM storage_allocation WHERE user_id = ?',
-            [req.user.id]
-        );
+        let storage = await db.findStorageByUserId(req.user.id);
 
         if (storage.length === 0) {
-            await db.query(
-                'INSERT INTO storage_allocation (user_id, total_space, used_space) VALUES (?, ?, ?)',
-                [req.user.id, 1024 * 1024 * 1024, 0]
-            );
-            storage = [{ total_space: 1024 * 1024 * 1024, used_space: 0 }];
+            // Create default storage allocation
+            await db.insertStorage(req.user.id, 1073741824, 0); // 1GB default
+            storage = [{ total_space: 1073741824, used_space: 0 }];
         }
 
         const fileSize = req.file.size;
@@ -273,16 +255,10 @@ app.post('/api/files/upload', verifyToken, upload.single('file'), async (req, re
         const webdavPath = await webdavService.uploadFile(req.user.id, uniqueName, req.file.buffer);
 
         // Update storage usage
-        await db.query(
-            'UPDATE storage_allocation SET used_space = ? WHERE user_id = ?',
-            [newUsedSpace, req.user.id]
-        );
+        await db.updateStorageUsed(req.user.id, newUsedSpace);
 
         // Save file info to database
-        const result = await db.query(
-            'INSERT INTO files (user_id, filename, original_name, size, type, path) VALUES (?, ?, ?, ?, ?, ?)',
-            [req.user.id, uniqueName, req.file.originalname, fileSize, req.file.mimetype, webdavPath]
-        );
+        const result = await db.insertFile(req.user.id, uniqueName, req.file.originalname, fileSize, req.file.mimetype, webdavPath);
 
         // Log activity and create notification
         await logActivity(req.user.id, `Uploaded file: ${req.file.originalname}`, {
@@ -328,11 +304,7 @@ app.post('/api/files/upload', verifyToken, upload.single('file'), async (req, re
 
 app.get('/api/files', verifyToken, async (req, res) => {
     try {
-        const files = await db.query(
-            'SELECT id, filename, original_name, size, type, created_at, updated_at FROM files WHERE user_id = ? ORDER BY created_at DESC',
-            [req.user.id]
-        );
-
+        const files = await db.findFilesByUserId(req.user.id);
         res.json({ files });
     } catch (error) {
         console.error('Files fetch error:', error);
@@ -342,10 +314,7 @@ app.get('/api/files', verifyToken, async (req, res) => {
 
 app.get('/api/files/download/:filename', verifyToken, async (req, res) => {
     try {
-        const files = await db.query(
-            'SELECT * FROM files WHERE filename = ? AND user_id = ?',
-            [req.params.filename, req.user.id]
-        );
+        const files = await db.findFileByFilename(req.params.filename, req.user.id);
 
         if (files.length === 0) {
             return res.status(404).json({ message: 'File not found' });
@@ -377,10 +346,7 @@ app.get('/api/files/download/:filename', verifyToken, async (req, res) => {
 
 app.delete('/api/files/:id', verifyToken, async (req, res) => {
     try {
-        const files = await db.query(
-            'SELECT * FROM files WHERE id = ? AND user_id = ?',
-            [req.params.id, req.user.id]
-        );
+        const files = await db.findFileById(req.params.id, req.user.id);
 
         if (files.length === 0) {
             return res.status(404).json({ message: 'File not found' });
@@ -396,16 +362,10 @@ app.delete('/api/files/:id', verifyToken, async (req, res) => {
         }
 
         // Update storage usage
-        await db.query(
-            'UPDATE storage_allocation SET used_space = used_space - ? WHERE user_id = ?',
-            [fileData.size, req.user.id]
-        );
+        await db.decrementStorageUsed(req.user.id, fileData.size);
 
         // Delete database record
-        await db.query(
-            'DELETE FROM files WHERE id = ?',
-            [req.params.id]
-        );
+        await db.deleteFile(req.params.id);
 
         // Log activity and create notification
         await logActivity(req.user.id, `Deleted file: ${fileData.original_name}`, {
@@ -430,17 +390,11 @@ app.delete('/api/files/:id', verifyToken, async (req, res) => {
 // Storage Routes
 app.get('/api/storage/info', verifyToken, async (req, res) => {
     try {
-        let storage = await db.query(
-            'SELECT * FROM storage_allocation WHERE user_id = ?',
-            [req.user.id]
-        );
+        let storage = await db.findStorageByUserId(req.user.id);
 
         if (storage.length === 0) {
-            await db.query(
-                'INSERT INTO storage_allocation (user_id, total_space, used_space) VALUES (?, ?, ?)',
-                [req.user.id, 1024 * 1024 * 1024, 0]
-            );
-            storage = [{ total_space: 1024 * 1024 * 1024, used_space: 0 }];
+            await db.insertStorage(req.user.id, 1073741824, 0); // 1GB default
+            storage = [{ total_space: 1073741824, used_space: 0 }];
         }
 
         res.json({
@@ -457,11 +411,7 @@ app.get('/api/storage/info', verifyToken, async (req, res) => {
 // Activity Routes
 app.get('/api/activities', verifyToken, async (req, res) => {
     try {
-        const activities = await db.query(
-            'SELECT * FROM activities WHERE user_id = ? ORDER BY created_at DESC LIMIT 20',
-            [req.user.id]
-        );
-
+        const activities = await db.findActivitiesByUserId(req.user.id, 20);
         res.json({ activities });
     } catch (error) {
         console.error('Activities fetch error:', error);
@@ -478,16 +428,10 @@ app.post('/api/teams', verifyToken, async (req, res) => {
             return res.status(400).json({ message: 'Team name is required' });
         }
 
-        const result = await db.query(
-            'INSERT INTO teams (name, description, created_by) VALUES (?, ?, ?)',
-            [name.trim(), description || null, req.user.id]
-        );
+        const result = await db.insertTeam(name.trim(), description || '', req.user.id);
 
         // Add creator as admin
-        await db.query(
-            'INSERT INTO team_members (team_id, user_id, role) VALUES (?, ?, ?)',
-            [result.insertId, req.user.id, 'admin']
-        );
+        await db.insertTeamMember(result.insertId, req.user.id, 'admin');
 
         // Log activity
         await logActivity(req.user.id, `Created team: ${name}`, {
@@ -519,24 +463,21 @@ app.post('/api/teams', verifyToken, async (req, res) => {
 
 app.get('/api/teams', verifyToken, async (req, res) => {
     try {
-        const teams = await db.query(`
-            SELECT t.*, 
-                   COUNT(tm.user_id) as member_count,
-                   u.username as creator_name
-            FROM teams t 
-            LEFT JOIN team_members tm ON t.id = tm.team_id 
-            LEFT JOIN users u ON t.created_by = u.id
-            WHERE t.id IN (
-                SELECT DISTINCT team_id FROM team_members WHERE user_id = ?
-            )
-            GROUP BY t.id
-            ORDER BY t.created_at DESC
-        `, [req.user.id]);
-
+        const teams = await db.findTeamsByUserId(req.user.id);
         res.json({ teams });
     } catch (error) {
         console.error('Teams fetch error:', error);
         res.status(500).json({ message: 'Error fetching teams' });
+    }
+});
+
+app.get('/api/teams/members', verifyToken, async (req, res) => {
+    try {
+        const members = await db.findTeamMembersByUserId(req.user.id);
+        res.json({ members });
+    } catch (error) {
+        console.error('Team members fetch error:', error);
+        res.status(500).json({ message: 'Error fetching team members' });
     }
 });
 
@@ -545,27 +486,19 @@ app.get('/api/notifications', verifyToken, async (req, res) => {
     try {
         const { limit = 50, offset = 0, unread_only = false } = req.query;
         
-        let query = 'SELECT * FROM notifications WHERE user_id = ?';
-        let params = [req.user.id];
-
-        if (unread_only === 'true') {
-            query += ' AND read = false';
-        }
-
-        query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
-        params.push(parseInt(limit), parseInt(offset));
-
-        const notifications = await db.query(query, params);
+        const notifications = await db.findNotificationsByUserId(
+            req.user.id, 
+            unread_only === 'true', 
+            parseInt(limit), 
+            parseInt(offset)
+        );
 
         // Get unread count
-        const unreadCount = await db.query(
-            'SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND `read` = false',
-            [req.user.id]
-        );
+        const unreadCount = await db.countUnreadNotifications(req.user.id);
 
         res.json({ 
             notifications,
-            unread_count: unreadCount[0].count,
+            unread_count: unreadCount,
             total: notifications.length
         });
     } catch (error) {
@@ -578,10 +511,7 @@ app.patch('/api/notifications/:id/read', verifyToken, async (req, res) => {
     try {
         const { id } = req.params;
         
-        const result = await db.query(
-            'UPDATE notifications SET read = true WHERE id = ? AND user_id = ?',
-            [id, req.user.id]
-        );
+        const result = await db.markNotificationAsRead(id, req.user.id);
 
         if (result.affectedRows === 0) {
             return res.status(404).json({ message: 'Notification not found' });
@@ -596,11 +526,7 @@ app.patch('/api/notifications/:id/read', verifyToken, async (req, res) => {
 
 app.patch('/api/notifications/mark-all-read', verifyToken, async (req, res) => {
     try {
-        await db.query(
-            'UPDATE notifications SET read = true WHERE user_id = ? AND read = false',
-            [req.user.id]
-        );
-
+        await db.markAllNotificationsAsRead(req.user.id);
         res.json({ message: 'All notifications marked as read' });
     } catch (error) {
         console.error('Mark all read error:', error);
@@ -612,10 +538,7 @@ app.delete('/api/notifications/:id', verifyToken, async (req, res) => {
     try {
         const { id } = req.params;
         
-        const result = await db.query(
-            'DELETE FROM notifications WHERE id = ? AND user_id = ?',
-            [id, req.user.id]
-        );
+        const result = await db.deleteNotification(id, req.user.id);
 
         if (result.affectedRows === 0) {
             return res.status(404).json({ message: 'Notification not found' });
@@ -628,13 +551,20 @@ app.delete('/api/notifications/:id', verifyToken, async (req, res) => {
     }
 });
 
+app.delete('/api/notifications', verifyToken, async (req, res) => {
+    try {
+        await db.deleteAllNotifications(req.user.id);
+        res.json({ message: 'All notifications deleted successfully' });
+    } catch (error) {
+        console.error('Delete all notifications error:', error);
+        res.status(500).json({ message: 'Error deleting all notifications' });
+    }
+});
+
 // User Profile Routes
 app.get('/api/user/profile', verifyToken, async (req, res) => {
     try {
-        const users = await db.query(
-            'SELECT id, username, email, created_at FROM users WHERE id = ?',
-            [req.user.id]
-        );
+        const users = await db.findUserById(req.user.id);
 
         if (users.length === 0) {
             return res.status(404).json({ message: 'User not found' });
@@ -644,6 +574,43 @@ app.get('/api/user/profile', verifyToken, async (req, res) => {
     } catch (error) {
         console.error('Profile fetch error:', error);
         res.status(500).json({ message: 'Error fetching profile' });
+    }
+});
+
+// Statistics Routes
+app.get('/api/user/stats', verifyToken, async (req, res) => {
+    try {
+        const stats = await db.getUserStats(req.user.id);
+        
+        if (!stats) {
+            return res.status(404).json({ message: 'User stats not found' });
+        }
+
+        res.json(stats);
+    } catch (error) {
+        console.error('User stats error:', error);
+        res.status(500).json({ message: 'Error fetching user statistics' });
+    }
+});
+
+app.get('/api/user/file-types', verifyToken, async (req, res) => {
+    try {
+        const fileTypes = await db.getFileTypeStats(req.user.id);
+        res.json({ file_types: fileTypes });
+    } catch (error) {
+        console.error('File types stats error:', error);
+        res.status(500).json({ message: 'Error fetching file type statistics' });
+    }
+});
+
+app.get('/api/user/activity-stats', verifyToken, async (req, res) => {
+    try {
+        const { days = 7 } = req.query;
+        const activityStats = await db.getRecentActivity(req.user.id, parseInt(days));
+        res.json({ activity_stats: activityStats });
+    } catch (error) {
+        console.error('Activity stats error:', error);
+        res.status(500).json({ message: 'Error fetching activity statistics' });
     }
 });
 
@@ -674,6 +641,47 @@ app.get('/api/database/info', async (req, res) => {
             connected: await db.testConnection()
         }
     });
+});
+
+// Maintenance endpoints (optional)
+app.post('/api/admin/cleanup/notifications', verifyToken, async (req, res) => {
+    try {
+        const { days = 30 } = req.body;
+        const result = await db.cleanupOldNotifications(days);
+        
+        await logActivity(req.user.id, `Cleaned up old notifications (${result.deletedCount} deleted)`, {
+            deletedCount: result.deletedCount,
+            days: days
+        });
+        
+        res.json({ 
+            message: `Cleaned up ${result.deletedCount} old notifications`,
+            deletedCount: result.deletedCount
+        });
+    } catch (error) {
+        console.error('Cleanup notifications error:', error);
+        res.status(500).json({ message: 'Error cleaning up notifications' });
+    }
+});
+
+app.post('/api/admin/cleanup/activities', verifyToken, async (req, res) => {
+    try {
+        const { days = 90 } = req.body;
+        const result = await db.cleanupOldActivities(days);
+        
+        await logActivity(req.user.id, `Cleaned up old activities (${result.deletedCount} deleted)`, {
+            deletedCount: result.deletedCount,
+            days: days
+        });
+        
+        res.json({ 
+            message: `Cleaned up ${result.deletedCount} old activities`,
+            deletedCount: result.deletedCount
+        });
+    } catch (error) {
+        console.error('Cleanup activities error:', error);
+        res.status(500).json({ message: 'Error cleaning up activities' });
+    }
 });
 
 // Apply error handling middleware

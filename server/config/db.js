@@ -1,11 +1,12 @@
 // server/config/db.js
 import mysql from 'mysql2/promise';
 import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
 import DatabaseFactory from './database-factory.js';
+import dotenv from 'dotenv';
 dotenv.config();
 
-const DB_TYPE = process.env.DB_TYPE || 'supabase'; // 'mysql' or 'supabase'
+const db = DatabaseFactory.create(process.env.DB_TYPE || 'supabase');
+
 
 let dbClient = null;
 
@@ -37,7 +38,7 @@ const createSupabaseClient = () => {
 // Database Adapter Class
 class DatabaseAdapter {
   constructor() {
-    this.type = DB_TYPE;
+    this.type = db;
     
     if (this.type === 'supabase') {
       this.client = createSupabaseClient();
@@ -424,5 +425,4 @@ class DatabaseAdapter {
 }
 
 // Create and export database adapter instance
-const db = DatabaseFactory.create();
 export default db;
